@@ -62,6 +62,7 @@ export const NewsCalendar: React.FC = () => {
       });
 
       if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
 
       if (data?.data && Array.isArray(data.data)) {
         const formattedEvents: EconomicEvent[] = data.data.map((event: any, index: number) => ({
