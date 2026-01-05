@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickData } from 'lightweight-charts';
+import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries } from 'lightweight-charts';
 import { Play, Pause, ShoppingCart, ArrowUpCircle, ArrowDownCircle, Target, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -85,15 +85,14 @@ export const DemoTrading: React.FC = () => {
       },
     });
 
-    const candlestickSeries = chart.addSeries({
-      type: 'Candlestick',
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#22c55e',
       downColor: '#ef4444',
       borderDownColor: '#ef4444',
       borderUpColor: '#22c55e',
       wickDownColor: '#ef4444',
       wickUpColor: '#22c55e',
-    } as any);
+    });
 
     const initialData = generateMockData();
     candlestickSeries.setData(initialData as any);
