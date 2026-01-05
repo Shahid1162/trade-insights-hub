@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,6 +6,65 @@
 
 @layer base {
   :root {
+    /* Light mode (default) */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 98%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 173 80% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 173 80% 40%;
+
+    --radius: 0.75rem;
+
+    /* Custom trading colors */
+    --bullish: 142 76% 36%;
+    --bullish-foreground: 0 0% 100%;
+    --bearish: 0 84% 60%;
+    --bearish-foreground: 0 0% 100%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(173, 80%, 40%), hsl(199, 89%, 48%));
+    --gradient-bullish: linear-gradient(135deg, hsl(142, 76%, 36%), hsl(142, 76%, 28%));
+    --gradient-bearish: linear-gradient(135deg, hsl(0, 84%, 60%), hsl(0, 84%, 50%));
+    --gradient-card: linear-gradient(135deg, hsl(0, 0%, 98%), hsl(0, 0%, 96%));
+    --gradient-glass: linear-gradient(135deg, rgba(0,0,0,0.02), rgba(0,0,0,0.01));
+
+    /* Shadows */
+    --shadow-glow: 0 0 40px hsl(173 80% 40% / 0.1);
+    --shadow-card: 0 4px 24px rgba(0,0,0,0.08);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 173 80% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 173 80% 40%;
+  }
+
+  .dark {
     --background: 222 47% 6%;
     --foreground: 210 40% 98%;
 
@@ -34,22 +93,11 @@
     --input: 222 30% 15%;
     --ring: 173 80% 50%;
 
-    --radius: 0.75rem;
-
-    /* Custom trading colors */
-    --bullish: 142 76% 45%;
-    --bullish-foreground: 0 0% 100%;
-    --bearish: 0 84% 60%;
-    --bearish-foreground: 0 0% 100%;
-    
-    /* Gradients */
+    /* Dark mode gradients */
     --gradient-primary: linear-gradient(135deg, hsl(173, 80%, 50%), hsl(199, 89%, 48%));
-    --gradient-bullish: linear-gradient(135deg, hsl(142, 76%, 45%), hsl(142, 76%, 35%));
-    --gradient-bearish: linear-gradient(135deg, hsl(0, 84%, 60%), hsl(0, 84%, 50%));
     --gradient-card: linear-gradient(135deg, hsl(222, 47%, 10%), hsl(222, 47%, 8%));
     --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
 
-    /* Shadows */
     --shadow-glow: 0 0 40px hsl(173 80% 50% / 0.15);
     --shadow-card: 0 4px 24px rgba(0,0,0,0.3);
 
@@ -62,11 +110,6 @@
     --sidebar-border: 222 30% 18%;
     --sidebar-ring: 173 80% 50%;
   }
-
-  .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
-  }
 }
 
 @layer base {
@@ -76,11 +119,12 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Poppins', sans-serif;
+    font-size: 15px;
   }
 
   .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Fira Code', monospace;
   }
 }
 

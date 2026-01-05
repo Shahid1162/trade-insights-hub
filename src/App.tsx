@@ -6,7 +6,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useState } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { WatchlistProvider } from "@/contexts/WatchlistContext";
-import { Navbar } from "@/components/layout/Navbar";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { MobileNav } from "@/components/layout/MobileNav";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { Explore } from "@/components/explore/Explore";
@@ -34,9 +36,21 @@ const MainApp = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar activeSection={activeSection} onSectionChange={setActiveSection} />
-      <main className="pt-20 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        {renderSection()}
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:block">
+        <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+      </div>
+      
+      {/* Mobile Navigation */}
+      <div className="lg:hidden">
+        <MobileNav activeSection={activeSection} onSectionChange={setActiveSection} />
+      </div>
+      
+      {/* Main Content */}
+      <main className="lg:ml-64 min-h-screen">
+        <div className="pt-16 lg:pt-6 pb-12 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
+          {renderSection()}
+        </div>
       </main>
     </div>
   );
@@ -44,21 +58,23 @@ const MainApp = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <WatchlistProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AuthModal />
-            <Routes>
-              <Route path="/" element={<MainApp />} />
-              <Route path="*" element={<MainApp />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </WatchlistProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <WatchlistProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <AuthModal />
+              <Routes>
+                <Route path="/" element={<MainApp />} />
+                <Route path="*" element={<MainApp />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </WatchlistProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
