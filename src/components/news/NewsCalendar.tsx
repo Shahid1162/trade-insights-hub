@@ -1,20 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Globe, TrendingUp, TrendingDown, Minus, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Calendar, Globe, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EconomicEvent } from '@/lib/types';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-// Mock economic events (API integration would replace this)
-const mockEvents: EconomicEvent[] = [
+// Fallback mock events when API fails
+const fallbackEvents: EconomicEvent[] = [
   { id: '1', title: 'US Non-Farm Payrolls', country: 'USD', date: '2025-01-06', time: '13:30', impact: 'high', forecast: '180K', previous: '199K' },
   { id: '2', title: 'ECB Interest Rate Decision', country: 'EUR', date: '2025-01-06', time: '12:15', impact: 'high', forecast: '4.0%', previous: '4.0%' },
   { id: '3', title: 'UK GDP m/m', country: 'GBP', date: '2025-01-07', time: '07:00', impact: 'medium', forecast: '0.2%', previous: '0.1%', actual: '0.3%' },
   { id: '4', title: 'Australia Employment Change', country: 'AUD', date: '2025-01-07', time: '00:30', impact: 'high', forecast: '25.0K', previous: '15.9K' },
   { id: '5', title: 'Japan Core CPI y/y', country: 'JPY', date: '2025-01-08', time: '23:30', impact: 'medium', forecast: '2.9%', previous: '2.8%' },
-  { id: '6', title: 'Canada Unemployment Rate', country: 'CAD', date: '2025-01-08', time: '13:30', impact: 'medium', forecast: '5.9%', previous: '5.8%' },
-  { id: '7', title: 'Fed Chair Powell Speaks', country: 'USD', date: '2025-01-09', time: '18:00', impact: 'high' },
-  { id: '8', title: 'German ZEW Economic Sentiment', country: 'EUR', date: '2025-01-09', time: '10:00', impact: 'medium', forecast: '15.0', previous: '12.5' },
-  { id: '9', title: 'US CPI m/m', country: 'USD', date: '2025-01-10', time: '13:30', impact: 'high', forecast: '0.2%', previous: '0.1%' },
-  { id: '10', title: 'China Trade Balance', country: 'CNY', date: '2025-01-10', time: '03:00', impact: 'medium', forecast: '$75.0B', previous: '$71.7B' },
 ];
 
 const countryFlags: Record<string, string> = {
@@ -35,13 +32,17 @@ const impactColors = {
   low: 'bg-muted text-muted-foreground border-border',
 };
 
+type EventCategory = 'all' | 'upcoming' | 'ongoing' | 'previous';
+
 export const NewsCalendar: React.FC = () => {
-  const [events, setEvents] = useState<EconomicEvent[]>(mockEvents);
-  const [filter, setFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [events, setEvents] = useState<EconomicEvent[]>(fallbackEvents);
+  const [impactFilter, setImpactFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<EventCategory>('all');
   const [loading, setLoading] = useState(false);
+  const [isLive, setIsLive] = useState(false);
 
   const filteredEvents = events.filter(
-    (event) => filter === 'all' || event.impact === filter
+    (event) => impactFilter === 'all' || event.impact === impactFilter
   );
 
   // Group events by date
@@ -53,12 +54,48 @@ export const NewsCalendar: React.FC = () => {
     return acc;
   }, {} as Record<string, EconomicEvent[]>);
 
-  const refreshData = async () => {
+  const fetchEconomicNews = async (category: EventCategory = 'all') => {
     setLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.functions.invoke('economic-news', {
+        body: { action: category },
+      });
+
+      if (error) throw error;
+
+      if (data?.data && Array.isArray(data.data)) {
+        const formattedEvents: EconomicEvent[] = data.data.map((event: any, index: number) => ({
+          id: event.id || String(index),
+          title: event.title || event.event || 'Unknown Event',
+          country: event.country || event.currency || 'USD',
+          date: event.date || new Date().toISOString().split('T')[0],
+          time: event.time || '00:00',
+          impact: event.impact || 'medium',
+          forecast: event.forecast,
+          previous: event.previous,
+          actual: event.actual,
+        }));
+        setEvents(formattedEvents);
+        setIsLive(true);
+        toast.success('Economic news updated');
+      } else if (data?.data) {
+        // Handle single object response
+        console.log('API response:', data);
+        setIsLive(true);
+      }
+    } catch (error) {
+      console.error('Error fetching economic news:', error);
+      toast.error('Failed to fetch live news, showing cached data');
+      setEvents(fallbackEvents);
+      setIsLive(false);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchEconomicNews(categoryFilter);
+  }, [categoryFilter]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -77,25 +114,52 @@ export const NewsCalendar: React.FC = () => {
         </p>
       </div>
 
-      {/* Filters */}
+      {/* Status Bar */}
+      <div className="flex items-center justify-between p-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
+        <div className="flex items-center gap-3">
+          <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-bullish animate-pulse' : 'bg-amber-500'}`}></div>
+          <span className="text-sm text-muted-foreground">
+            {isLive ? 'Live Economic Data' : 'Cached Data'}
+          </span>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => fetchEconomicNews(categoryFilter)} disabled={loading}>
+          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Category Filters */}
+      <div className="flex flex-wrap items-center gap-4 animate-fade-in">
+        <span className="text-sm text-muted-foreground">Category:</span>
+        <div className="flex gap-2">
+          {(['all', 'upcoming', 'ongoing', 'previous'] as EventCategory[]).map((category) => (
+            <Button
+              key={category}
+              variant={categoryFilter === category ? 'gradient' : 'outline'}
+              size="sm"
+              onClick={() => setCategoryFilter(category)}
+            >
+              {category.charAt(0).toUpperCase() + category.slice(1)}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Impact Filters */}
       <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in">
         <div className="flex gap-2">
           {(['all', 'high', 'medium', 'low'] as const).map((level) => (
             <Button
               key={level}
-              variant={filter === level ? 'gradient' : 'outline'}
+              variant={impactFilter === level ? 'gradient' : 'outline'}
               size="sm"
-              onClick={() => setFilter(level)}
+              onClick={() => setImpactFilter(level)}
             >
               {level === 'high' && <AlertTriangle className="w-4 h-4 mr-1" />}
               {level.charAt(0).toUpperCase() + level.slice(1)} Impact
             </Button>
           ))}
         </div>
-        <Button variant="secondary" size="sm" onClick={refreshData} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
       </div>
 
       {/* Legend */}
