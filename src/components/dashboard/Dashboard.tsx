@@ -176,12 +176,12 @@ export const Dashboard: React.FC = () => {
       {/* Market Ticker */}
       <div className="relative overflow-hidden py-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
         <div className="flex animate-ticker gap-8">
-          {[...allStocks, ...allStocks].map((stock, i) => (
+          {[...allStocks, ...allStocks].filter(s => s?.price != null).map((stock, i) => (
             <div key={`${stock.symbol}-${i}`} className="flex items-center gap-3 whitespace-nowrap">
               <span className="font-semibold">{stock.symbol}</span>
-              <span className="font-mono">${stock.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-              <span className={stock.change >= 0 ? 'text-bullish' : 'text-bearish'}>
-                {stock.change >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+              <span className="font-mono">${(stock.price ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span className={(stock.change ?? 0) >= 0 ? 'text-bullish' : 'text-bearish'}>
+                {(stock.change ?? 0) >= 0 ? '+' : ''}{(stock.changePercent ?? 0).toFixed(2)}%
               </span>
             </div>
           ))}
