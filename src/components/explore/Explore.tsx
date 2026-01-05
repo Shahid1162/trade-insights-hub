@@ -1,23 +1,11 @@
 import React, { useState } from 'react';
-import { Search, Plus, Trash2, TrendingUp, TrendingDown, Star } from 'lucide-react';
+import { Search, Plus, Trash2, TrendingUp, TrendingDown, Star, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWatchlist } from '@/contexts/WatchlistContext';
 import { Stock } from '@/lib/types';
+import { searchSymbols, getStockQuote, SearchResult } from '@/lib/marketApi';
 import { toast } from 'sonner';
-
-// Mock search results
-const mockSearchResults: Stock[] = [
-  { symbol: 'AAPL', name: 'Apple Inc.', price: 178.50, change: 2.34, changePercent: 1.33, market: 'us' },
-  { symbol: 'MSFT', name: 'Microsoft Corporation', price: 378.90, change: -5.67, changePercent: -1.47, market: 'us' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', price: 140.25, change: 3.45, changePercent: 2.52, market: 'us' },
-  { symbol: 'TSLA', name: 'Tesla Inc.', price: 245.80, change: 8.45, changePercent: 3.56, market: 'us' },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', price: 155.20, change: -2.30, changePercent: -1.46, market: 'us' },
-  { symbol: 'BTC', name: 'Bitcoin', price: 43567.89, change: 1234.56, changePercent: 2.92, market: 'crypto' },
-  { symbol: 'ETH', name: 'Ethereum', price: 2345.67, change: -78.90, changePercent: -3.25, market: 'crypto' },
-  { symbol: 'RELIANCE', name: 'Reliance Industries', price: 2456.75, change: 34.50, changePercent: 1.42, market: 'indian' },
-  { symbol: 'TCS', name: 'Tata Consultancy Services', price: 3890.20, change: -45.30, changePercent: -1.15, market: 'indian' },
-];
 
 export const Explore: React.FC = () => {
   const { isAuthenticated, setShowAuthModal, setAuthMode } = useAuth();
@@ -25,8 +13,9 @@ export const Explore: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Stock[]>([]);
   const [showWatchlist, setShowWatchlist] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!isAuthenticated) {
       setAuthMode('login');
       setShowAuthModal(true);
@@ -38,13 +27,54 @@ export const Explore: React.FC = () => {
       return;
     }
 
-    // Filter mock results based on query
-    const results = mockSearchResults.filter(
-      (stock) =>
-        stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stock.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    setSearchResults(results);
+    setLoading(true);
+    try {
+      // First search for matching symbols
+      const results: SearchResult[] = await searchSymbols(searchQuery);
+      
+      if (results.length === 0) {
+        toast.info('No results found');
+        setSearchResults([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get quotes for top results
+      const stockResults: Stock[] = [];
+      for (const result of results.slice(0, 5)) {
+        const quote = await getStockQuote(result.symbol);
+        if (quote && quote.price) {
+          stockResults.push({
+            symbol: result.symbol,
+            name: result.name,
+            price: quote.price,
+            change: quote.change || 0,
+            changePercent: quote.changePercent || 0,
+            market: result.region === 'United States' ? 'us' : 'indian',
+          });
+        } else {
+          // Add without price data
+          stockResults.push({
+            symbol: result.symbol,
+            name: result.name,
+            price: 0,
+            change: 0,
+            changePercent: 0,
+            market: result.region === 'United States' ? 'us' : 'indian',
+          });
+        }
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      setSearchResults(stockResults);
+      toast.success(`Found ${stockResults.length} results`);
+    } catch (error) {
+      console.error('Search error:', error);
+      toast.error('Search failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddToWatchlist = (stock: Stock) => {
@@ -76,7 +106,7 @@ export const Explore: React.FC = () => {
           <span className="gradient-text">Explore</span> Markets
         </h1>
         <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-          Search for stocks, cryptocurrencies, and more. Add your favorites to your watchlist.
+          Search for stocks, cryptocurrencies, and more using live Alpha Vantage data.
         </p>
       </div>
 
@@ -86,21 +116,25 @@ export const Explore: React.FC = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search stocks, crypto, indices..."
+            placeholder="Search stocks, crypto, indices... (e.g., AAPL, MSFT, BTC)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="w-full trading-input pl-12 pr-24"
+            className="w-full trading-input pl-12 pr-28"
           />
           <Button
             variant="gradient"
             size="sm"
             className="absolute right-2 top-1/2 -translate-y-1/2"
             onClick={handleSearch}
+            disabled={loading}
           >
-            Search
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground mt-2 text-center">
+          Powered by Alpha Vantage API • Real-time market data
+        </p>
       </div>
 
       {/* Toggle Buttons */}
@@ -125,7 +159,12 @@ export const Explore: React.FC = () => {
       <div className="space-y-4">
         {!showWatchlist ? (
           <>
-            {searchResults.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-12 animate-fade-in">
+                <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-primary" />
+                <p className="text-muted-foreground">Searching Alpha Vantage...</p>
+              </div>
+            ) : searchResults.length > 0 ? (
               <div className="grid gap-4">
                 {searchResults.map((stock, index) => {
                   const isPositive = stock.change >= 0;
@@ -152,11 +191,15 @@ export const Explore: React.FC = () => {
                       <div className="flex items-center gap-6">
                         <div className="text-right">
                           <p className="text-xl font-mono font-bold">
-                            ${stock.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {stock.price > 0 
+                              ? `$${stock.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}` 
+                              : 'N/A'}
                           </p>
-                          <p className={`text-sm font-medium ${isPositive ? 'text-bullish' : 'text-bearish'}`}>
-                            {isPositive ? '+' : ''}{stock.changePercent.toFixed(2)}%
-                          </p>
+                          {stock.price > 0 && (
+                            <p className={`text-sm font-medium ${isPositive ? 'text-bullish' : 'text-bearish'}`}>
+                              {isPositive ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                            </p>
+                          )}
                         </div>
                         <Button
                           variant={inWatchlist ? 'secondary' : 'outline'}
@@ -174,6 +217,7 @@ export const Explore: React.FC = () => {
               <div className="text-center py-12 text-muted-foreground animate-fade-in">
                 <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>Search for stocks, cryptocurrencies, or indices to get started</p>
+                <p className="text-sm mt-2">Try: AAPL, MSFT, GOOGL, TSLA, BTC</p>
               </div>
             )}
           </>
