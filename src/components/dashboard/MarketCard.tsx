@@ -8,7 +8,10 @@ interface MarketCardProps {
 }
 
 export const MarketCard: React.FC<MarketCardProps> = ({ stock, index }) => {
-  const isPositive = stock.change >= 0;
+  const price = stock?.price ?? 0;
+  const change = stock?.change ?? 0;
+  const changePercent = stock?.changePercent ?? 0;
+  const isPositive = change >= 0;
 
   return (
     <div
@@ -17,8 +20,8 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index }) => {
     >
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="font-semibold text-foreground">{stock.symbol}</h3>
-          <p className="text-xs text-muted-foreground truncate max-w-[120px]">{stock.name}</p>
+          <h3 className="font-semibold text-foreground">{stock?.symbol ?? 'N/A'}</h3>
+          <p className="text-xs text-muted-foreground truncate max-w-[120px]">{stock?.name ?? 'Unknown'}</p>
         </div>
         <div className={`p-2 rounded-lg ${isPositive ? 'bg-bullish/10' : 'bg-bearish/10'}`}>
           {isPositive ? (
@@ -30,10 +33,10 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index }) => {
       </div>
       <div className="flex items-end justify-between">
         <span className="text-xl font-mono font-bold">
-          ${stock.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
         <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-bullish' : 'text-bearish'}`}>
-          <span>{isPositive ? '+' : ''}{stock.changePercent.toFixed(2)}%</span>
+          <span>{isPositive ? '+' : ''}{changePercent.toFixed(2)}%</span>
         </div>
       </div>
     </div>
