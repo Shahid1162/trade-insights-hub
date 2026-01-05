@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Globe, IndianRupee, Bitcoin, RefreshCw, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Globe, IndianRupee, Bitcoin, RefreshCw, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { MarketSection } from './MarketSection';
 import { Stock } from '@/lib/types';
-import { batchFetchQuotes, getCryptoQuote, MarketQuote } from '@/lib/marketApi';
+import { batchFetchQuotes, getCryptoQuote } from '@/lib/marketApi';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useRealtimePrices, simulatePriceMovement } from '@/hooks/useRealtimePrices';
 
 // Fallback mock data when API fails
 const fallbackIndianStocks: Stock[] = [
@@ -57,6 +58,30 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+
+  // Handle real-time price updates
+  const handlePriceUpdate = useCallback((update: { stocks: Stock[]; market: 'indian' | 'us' | 'crypto'; timestamp: number }) => {
+    console.log('[Dashboard] Received price update:', update.market);
+    switch (update.market) {
+      case 'indian':
+        setIndianStocks(update.stocks);
+        break;
+      case 'us':
+        setUsStocks(update.stocks);
+        break;
+      case 'crypto':
+        setCryptoAssets(update.stocks);
+        break;
+    }
+    setLastUpdated(new Date(update.timestamp));
+  }, []);
+
+  const { broadcastPriceUpdate } = useRealtimePrices({
+    onPriceUpdate: handlePriceUpdate,
+    onConnectionChange: setIsConnected,
+  });
 
   const fetchMarketData = async () => {
     setLoading(true);
@@ -74,14 +99,20 @@ export const Dashboard: React.FC = () => {
         }));
         setUsStocks(usData);
         setIsLive(true);
+        
+        // Broadcast to other clients
+        broadcastPriceUpdate({
+          stocks: usData,
+          market: 'us',
+          timestamp: Date.now(),
+        });
       }
 
       // Fetch crypto
       const cryptoData: Stock[] = [];
-      for (const symbol of cryptoSymbols.slice(0, 2)) { // Limit to avoid rate limiting
+      for (const symbol of cryptoSymbols.slice(0, 2)) {
         const quote = await getCryptoQuote(symbol);
         if (quote) {
-          // Calculate approximate change (API doesn't provide historical)
           const mockChange = (Math.random() - 0.5) * quote.price * 0.05;
           cryptoData.push({
             symbol: quote.symbol,
@@ -92,15 +123,21 @@ export const Dashboard: React.FC = () => {
             market: 'crypto' as const,
           });
         }
-        await new Promise(r => setTimeout(r, 300)); // Delay to avoid rate limits
+        await new Promise(r => setTimeout(r, 300));
       }
       
       if (cryptoData.length > 0) {
-        // Merge with fallback for symbols we couldn't fetch
         const mergedCrypto = [...cryptoData, ...fallbackCryptoAssets.filter(
           f => !cryptoData.some(c => c.symbol === f.symbol)
         )];
         setCryptoAssets(mergedCrypto);
+        
+        // Broadcast to other clients
+        broadcastPriceUpdate({
+          stocks: mergedCrypto,
+          market: 'crypto',
+          timestamp: Date.now(),
+        });
       }
 
       setLastUpdated(new Date());
@@ -113,11 +150,42 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  // Start/stop simulated real-time streaming
+  const toggleStreaming = () => {
+    setIsStreaming(prev => !prev);
+    if (!isStreaming) {
+      toast.success('Real-time streaming started');
+    } else {
+      toast.info('Real-time streaming stopped');
+    }
+  };
+
+  // Simulated real-time price updates
   useEffect(() => {
-    // Auto-refresh on mount
+    if (!isStreaming) return;
+
+    const interval = setInterval(() => {
+      // Simulate price movements for all markets
+      const updatedIndian = simulatePriceMovement(indianStocks);
+      const updatedUs = simulatePriceMovement(usStocks);
+      const updatedCrypto = simulatePriceMovement(cryptoAssets);
+
+      setIndianStocks(updatedIndian);
+      setUsStocks(updatedUs);
+      setCryptoAssets(updatedCrypto);
+      setLastUpdated(new Date());
+
+      // Broadcast updates to all connected clients
+      broadcastPriceUpdate({ stocks: updatedIndian, market: 'indian', timestamp: Date.now() });
+      broadcastPriceUpdate({ stocks: updatedUs, market: 'us', timestamp: Date.now() });
+      broadcastPriceUpdate({ stocks: updatedCrypto, market: 'crypto', timestamp: Date.now() });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isStreaming, indianStocks, usStocks, cryptoAssets, broadcastPriceUpdate]);
+
+  useEffect(() => {
     fetchMarketData();
-    
-    // Refresh every 5 minutes
     const interval = setInterval(fetchMarketData, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -137,37 +205,68 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Status Bar */}
-      <div className="flex items-center justify-between p-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
-        <div className="flex items-center gap-3">
-          <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-bullish animate-pulse' : 'bg-amber-500'}`}></div>
-          <span className="text-sm text-muted-foreground">
-            {isLive ? 'Live Market Data' : 'Cached Data'}
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            {isConnected ? (
+              <Wifi className="w-4 h-4 text-bullish" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-muted-foreground" />
+            )}
+            <span className="text-sm text-muted-foreground">
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-bullish animate-pulse' : isLive ? 'bg-bullish' : 'bg-amber-500'}`}></div>
+            <span className="text-sm text-muted-foreground">
+              {isStreaming ? 'Streaming Live' : isLive ? 'Live Data' : 'Cached Data'}
+            </span>
+          </div>
           {lastUpdated && (
             <span className="text-xs text-muted-foreground">
-              • Last updated: {lastUpdated.toLocaleTimeString()}
+              Last: {lastUpdated.toLocaleTimeString()}
             </span>
           )}
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={fetchMarketData}
-          disabled={loading}
-        >
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={isStreaming ? 'gradient' : 'outline'}
+            size="sm"
+            onClick={toggleStreaming}
+          >
+            {isStreaming ? (
+              <>
+                <div className="w-2 h-2 rounded-full bg-white animate-pulse mr-2" />
+                Stop Stream
+              </>
+            ) : (
+              <>
+                <Wifi className="w-4 h-4 mr-2" />
+                Start Stream
+              </>
+            )}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={fetchMarketData}
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* API Notice */}
-      {!isLive && (
+      {!isLive && !isStreaming && (
         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 animate-fade-in">
           <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-amber-400">API Rate Limits</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Some data may be cached due to API limits. Click refresh to try fetching live data.
+              Some data may be cached due to API limits. Click "Start Stream" for simulated real-time updates.
             </p>
           </div>
         </div>
