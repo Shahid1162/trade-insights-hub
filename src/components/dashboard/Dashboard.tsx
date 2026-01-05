@@ -141,7 +141,7 @@ export const Dashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-bullish animate-pulse' : 'bg-amber-500'}`}></div>
           <span className="text-sm text-muted-foreground">
-            {isLive ? 'Live Data via Alpha Vantage' : 'Cached Data'}
+            {isLive ? 'Live Market Data' : 'Cached Data'}
           </span>
           {lastUpdated && (
             <span className="text-xs text-muted-foreground">
@@ -165,9 +165,9 @@ export const Dashboard: React.FC = () => {
         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 animate-fade-in">
           <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-amber-400">Alpha Vantage Free Tier Limits</p>
+            <p className="text-sm font-medium text-amber-400">API Rate Limits</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Free API allows 25 requests/day. Some data may be cached. Upgrade to premium for real-time data.
+              Some data may be cached due to API limits. Click refresh to try fetching live data.
             </p>
           </div>
         </div>
