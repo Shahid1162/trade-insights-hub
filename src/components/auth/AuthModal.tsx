@@ -1,8 +1,20 @@
 import React, { useState } from 'react';
-import { X, Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { X, Mail, Lock, User, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { z } from 'zod';
+
+const loginSchema = z.object({
+  email: z.string().trim().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+const signupSchema = z.object({
+  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(50, 'Name is too long'),
+  email: z.string().trim().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
 
 export const AuthModal: React.FC = () => {
   const { showAuthModal, setShowAuthModal, authMode, setAuthMode, login, signup } = useAuth();
@@ -11,24 +23,67 @@ export const AuthModal: React.FC = () => {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const resetForm = () => {
+    setEmail('');
+    setPassword('');
+    setName('');
+    setError(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
+
     try {
       if (authMode === 'login') {
-        await login(email, password);
-        toast.success('Welcome back!');
+        // Validate login input
+        const validation = loginSchema.safeParse({ email, password });
+        if (!validation.success) {
+          setError(validation.error.errors[0].message);
+          setLoading(false);
+          return;
+        }
+
+        const result = await login(email, password);
+        if (result.error) {
+          // If user not found, suggest registration
+          if (result.error.includes('Invalid email or password')) {
+            setError(result.error);
+          } else {
+            setError(result.error);
+          }
+        } else {
+          toast.success('Welcome back!');
+          setShowAuthModal(false);
+          resetForm();
+        }
       } else {
-        await signup(name, email, password);
-        toast.success('Account created successfully!');
+        // Validate signup input
+        const validation = signupSchema.safeParse({ name, email, password });
+        if (!validation.success) {
+          setError(validation.error.errors[0].message);
+          setLoading(false);
+          return;
+        }
+
+        const result = await signup(name, email, password);
+        if (result.error) {
+          setError(result.error);
+          // If user already exists, suggest login
+          if (result.error.includes('already registered')) {
+            setTimeout(() => setAuthMode('login'), 2000);
+          }
+        } else {
+          toast.success('Account created successfully! Welcome to TA5.');
+          setShowAuthModal(false);
+          resetForm();
+        }
       }
-      setShowAuthModal(false);
-      setEmail('');
-      setPassword('');
-      setName('');
-    } catch (error) {
-      toast.error('Authentication failed. Please try again.');
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -36,6 +91,12 @@ export const AuthModal: React.FC = () => {
 
   const toggleMode = () => {
     setAuthMode(authMode === 'login' ? 'signup' : 'login');
+    setError(null);
+  };
+
+  const handleClose = () => {
+    setShowAuthModal(false);
+    resetForm();
   };
 
   if (!showAuthModal) return null;
@@ -43,7 +104,7 @@ export const AuthModal: React.FC = () => {
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in"
-      onClick={() => setShowAuthModal(false)}
+      onClick={handleClose}
     >
       <div
         className="w-full max-w-md p-8 rounded-2xl bg-card border border-border shadow-2xl animate-fade-in"
@@ -51,7 +112,7 @@ export const AuthModal: React.FC = () => {
       >
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold">
+            <h2 className="text-2xl font-bold text-foreground">
               {authMode === 'login' ? 'Welcome Back' : 'Create Account'}
             </h2>
             <p className="text-muted-foreground mt-1">
@@ -61,12 +122,30 @@ export const AuthModal: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => setShowAuthModal(false)}
+            onClick={handleClose}
             className="p-2 rounded-lg hover:bg-accent transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-destructive">{error}</p>
+              {error.includes('Invalid email or password') && (
+                <button
+                  onClick={() => setAuthMode('signup')}
+                  className="text-sm text-primary hover:underline mt-1"
+                >
+                  Create an account instead
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {authMode === 'signup' && (
@@ -79,6 +158,7 @@ export const AuthModal: React.FC = () => {
                 onChange={(e) => setName(e.target.value)}
                 className="w-full trading-input pl-12"
                 required
+                maxLength={50}
               />
             </div>
           )}
@@ -92,6 +172,7 @@ export const AuthModal: React.FC = () => {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full trading-input pl-12"
               required
+              maxLength={255}
             />
           </div>
 
@@ -104,6 +185,7 @@ export const AuthModal: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full trading-input pl-12 pr-12"
               required
+              minLength={6}
             />
             <button
               type="button"
