@@ -9,8 +9,24 @@ const corsHeaders = {
 const ALPHA_VANTAGE_API_KEY = Deno.env.get('ALPHA_VANTAGE_API_KEY');
 const BASE_URL = 'https://www.alphavantage.co/query';
 
+// Cache to reduce API calls (free tier: 25/day)
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCached(key: string) {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`Cache hit for ${key}`);
+    return cached.data;
+  }
+  return null;
+}
+
+function setCache(key: string, data: any) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -23,17 +39,30 @@ serve(async (req) => {
       throw new Error('Alpha Vantage API key not configured');
     }
 
+    const cacheKey = `${action}:${symbol}`;
+    const cachedData = getCached(cacheKey);
+    if (cachedData) {
+      return new Response(JSON.stringify({ data: cachedData, cached: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     let data;
 
     switch (action) {
       case 'quote':
-        // Get global quote for a symbol
         const quoteUrl = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Fetching quote for ${symbol}`);
         const quoteResponse = await fetch(quoteUrl);
         const quoteData = await quoteResponse.json();
+        console.log(`Quote response for ${symbol}:`, JSON.stringify(quoteData));
         
-        if (quoteData['Global Quote']) {
+        if (quoteData['Note'] || quoteData['Information']) {
+          console.log('API rate limit reached:', quoteData['Note'] || quoteData['Information']);
+          throw new Error('API rate limit reached. Please try again later.');
+        }
+        
+        if (quoteData['Global Quote'] && quoteData['Global Quote']['05. price']) {
           const q = quoteData['Global Quote'];
           data = {
             symbol: q['01. symbol'],
@@ -45,16 +74,21 @@ serve(async (req) => {
             volume: parseInt(q['06. volume']),
           };
         } else {
-          data = quoteData;
+          console.log('No valid quote data found for', symbol);
+          data = null;
         }
         break;
 
       case 'search':
-        // Search for symbols
         const searchUrl = `${BASE_URL}?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(symbol)}&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Searching for ${symbol}`);
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
+        
+        if (searchData['Note'] || searchData['Information']) {
+          console.log('API rate limit reached');
+          throw new Error('API rate limit reached. Please try again later.');
+        }
         
         if (searchData.bestMatches) {
           data = searchData.bestMatches.map((match: any) => ({
@@ -70,11 +104,16 @@ serve(async (req) => {
         break;
 
       case 'crypto':
-        // Get crypto exchange rate
         const cryptoUrl = `${BASE_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${symbol}&to_currency=USD&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Fetching crypto rate for ${symbol}`);
         const cryptoResponse = await fetch(cryptoUrl);
         const cryptoData = await cryptoResponse.json();
+        console.log(`Crypto response for ${symbol}:`, JSON.stringify(cryptoData));
+        
+        if (cryptoData['Note'] || cryptoData['Information']) {
+          console.log('API rate limit reached');
+          throw new Error('API rate limit reached. Please try again later.');
+        }
         
         if (cryptoData['Realtime Currency Exchange Rate']) {
           const rate = cryptoData['Realtime Currency Exchange Rate'];
@@ -86,17 +125,21 @@ serve(async (req) => {
             askPrice: parseFloat(rate['9. Ask Price']),
           };
         } else {
-          data = cryptoData;
+          console.log('No valid crypto data found for', symbol);
+          data = null;
         }
         break;
 
       case 'forex':
-        // Get forex exchange rate
         const [fromCurrency, toCurrency] = symbol.split('/');
         const forexUrl = `${BASE_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${fromCurrency}&to_currency=${toCurrency}&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Fetching forex rate for ${symbol}`);
         const forexResponse = await fetch(forexUrl);
         const forexData = await forexResponse.json();
+        
+        if (forexData['Note'] || forexData['Information']) {
+          throw new Error('API rate limit reached. Please try again later.');
+        }
         
         if (forexData['Realtime Currency Exchange Rate']) {
           const rate = forexData['Realtime Currency Exchange Rate'];
@@ -107,16 +150,19 @@ serve(async (req) => {
             askPrice: parseFloat(rate['9. Ask Price']),
           };
         } else {
-          data = forexData;
+          data = null;
         }
         break;
 
       case 'intraday':
-        // Get intraday data for charts
         const intradayUrl = `${BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=5min&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Fetching intraday data for ${symbol}`);
         const intradayResponse = await fetch(intradayUrl);
         const intradayData = await intradayResponse.json();
+        
+        if (intradayData['Note'] || intradayData['Information']) {
+          throw new Error('API rate limit reached. Please try again later.');
+        }
         
         const timeSeries = intradayData['Time Series (5min)'];
         if (timeSeries) {
@@ -134,16 +180,22 @@ serve(async (req) => {
         break;
 
       case 'batch':
-        // Batch fetch multiple symbols (we'll do this sequentially due to API limits)
         const symbols = symbol.split(',');
-        console.log(`Batch fetching ${symbols.length} symbols`);
+        console.log(`Batch fetching ${symbols.length} symbols:`, symbols);
         data = [];
         
-        for (const sym of symbols.slice(0, 5)) { // Limit to 5 to avoid rate limits
+        for (const sym of symbols.slice(0, 5)) {
           try {
-            const url = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${sym.trim()}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+            const trimmedSym = sym.trim();
+            const url = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${trimmedSym}&apikey=${ALPHA_VANTAGE_API_KEY}`;
             const response = await fetch(url);
             const result = await response.json();
+            console.log(`Batch result for ${trimmedSym}:`, JSON.stringify(result));
+            
+            if (result['Note'] || result['Information']) {
+              console.log('API rate limit reached during batch');
+              break; // Stop if rate limited
+            }
             
             if (result['Global Quote'] && result['Global Quote']['05. price']) {
               const q = result['Global Quote'];
@@ -154,8 +206,7 @@ serve(async (req) => {
                 changePercent: parseFloat(q['10. change percent']?.replace('%', '') || '0'),
               });
             }
-            // Small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 300));
           } catch (e) {
             console.error(`Error fetching ${sym}:`, e);
           }
@@ -166,7 +217,12 @@ serve(async (req) => {
         throw new Error(`Unknown action: ${action}`);
     }
 
-    console.log(`Successfully fetched data for action: ${action}`);
+    // Cache successful results
+    if (data) {
+      setCache(cacheKey, data);
+    }
+
+    console.log(`Successfully fetched data for action: ${action}, data:`, data ? 'present' : 'null');
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
