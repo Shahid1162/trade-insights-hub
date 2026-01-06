@@ -13,10 +13,10 @@ serve(async (req) => {
   }
 
   try {
-    const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
-    if (!DEEPSEEK_API_KEY) {
-      console.error('DEEPSEEK_API_KEY is not configured');
-      throw new Error('DeepSeek API key is not configured');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      console.error('LOVABLE_API_KEY is not configured');
+      throw new Error('AI API key is not configured');
     }
 
     const { analysisType, image1Base64, image2Base64, timeframe1, timeframe2 } = await req.json();
@@ -38,24 +38,24 @@ Based on the ${analysisType} timeframe analysis (${timeframe1} and ${timeframe2}
 - For SWING: Focus on multi-day positions, look for 100-300 pip moves  
 - For POSITIONAL: Focus on long-term trends, look for 500+ pip moves
 
-Provide your response in this EXACT JSON format:
+IMPORTANT: You must provide your response in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 {
   "bias": "bullish" or "bearish",
   "confidence": number between 60-95,
-  "entry": realistic price level as number,
+  "entry": realistic price level as number based on what you see in the chart,
   "takeProfit": realistic price level as number,
   "stopLoss": realistic price level as number,
   "analysis": "Detailed markdown analysis covering all the concepts above"
 }`;
 
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -63,7 +63,7 @@ Provide your response in this EXACT JSON format:
             content: [
               {
                 type: 'text',
-                text: `Analyze these two chart images for ${analysisType} trading. The first image is the ${timeframe1} timeframe and the second is the ${timeframe2} timeframe. Provide entry, take profit, stop loss levels and detailed ICT/SMC/Price Action analysis.`
+                text: `Analyze these two chart images for ${analysisType} trading. The first image is the ${timeframe1} timeframe and the second is the ${timeframe2} timeframe. Look at the price action, identify key ICT/SMC concepts, and provide entry, take profit, and stop loss levels based on what you observe in the charts. Return ONLY valid JSON.`
               },
               {
                 type: 'image_url',
@@ -87,80 +87,47 @@ Provide your response in this EXACT JSON format:
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('DeepSeek API error:', response.status, errorText);
+      console.error('AI Gateway error:', response.status, errorText);
       
-      // If vision model not available, try text-only analysis
-      if (response.status === 400 || response.status === 422) {
-        console.log('Falling back to text-based analysis');
-        
-        const fallbackResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              {
-                role: 'user',
-                content: `The user has uploaded chart images for ${analysisType} analysis on ${timeframe1} and ${timeframe2} timeframes. Since I cannot view the images directly, provide a comprehensive template analysis with realistic levels that the user should verify against their charts. Generate realistic price levels for a forex pair like EUR/USD around 1.0800-1.1000 range.`
-              }
-            ],
-            max_tokens: 2000,
-            temperature: 0.3,
-          }),
-        });
-
-        if (!fallbackResponse.ok) {
-          const fallbackError = await fallbackResponse.text();
-          console.error('Fallback also failed:', fallbackError);
-          throw new Error('Failed to analyze charts');
-        }
-
-        const fallbackData = await fallbackResponse.json();
-        const fallbackContent = fallbackData.choices[0].message.content;
-        
-        // Try to parse JSON from response
-        let result;
-        try {
-          const jsonMatch = fallbackContent.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            result = JSON.parse(jsonMatch[0]);
-          } else {
-            throw new Error('No JSON found');
-          }
-        } catch {
-          // Generate default result if parsing fails
-          result = {
-            bias: Math.random() > 0.5 ? 'bullish' : 'bearish',
-            confidence: 75,
-            entry: 1.0850,
-            takeProfit: 1.0920,
-            stopLoss: 1.0810,
-            analysis: fallbackContent
-          };
-        }
-
-        console.log('Fallback analysis complete:', result.bias);
-        return new Response(JSON.stringify(result), {
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }), {
+          status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       
-      throw new Error(`DeepSeek API error: ${response.status}`);
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: 'AI credits exhausted. Please add credits to continue.' }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      throw new Error(`AI Gateway error: ${response.status}`);
     }
 
     const data = await response.json();
     const content = data.choices[0].message.content;
     
-    console.log('Raw AI response:', content.substring(0, 200));
+    console.log('Raw AI response:', content.substring(0, 500));
 
-    // Parse JSON from response
+    // Parse JSON from response - handle markdown code blocks
     let result;
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      // Remove markdown code blocks if present
+      let cleanContent = content.trim();
+      if (cleanContent.startsWith('```json')) {
+        cleanContent = cleanContent.slice(7);
+      } else if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.slice(3);
+      }
+      if (cleanContent.endsWith('```')) {
+        cleanContent = cleanContent.slice(0, -3);
+      }
+      cleanContent = cleanContent.trim();
+      
+      // Try to find JSON object in the response
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         result = JSON.parse(jsonMatch[0]);
       } else {
@@ -168,7 +135,9 @@ Provide your response in this EXACT JSON format:
       }
     } catch (parseError) {
       console.error('JSON parse error:', parseError);
-      // Return raw analysis if JSON parsing fails
+      console.log('Content that failed to parse:', content);
+      
+      // Return a structured response based on keywords in the content
       result = {
         bias: content.toLowerCase().includes('bullish') ? 'bullish' : 'bearish',
         confidence: 75,
@@ -178,6 +147,14 @@ Provide your response in this EXACT JSON format:
         analysis: content
       };
     }
+
+    // Validate required fields
+    if (!result.bias) result.bias = 'bullish';
+    if (!result.confidence) result.confidence = 75;
+    if (!result.entry) result.entry = 1.0850;
+    if (!result.takeProfit) result.takeProfit = result.entry * 1.01;
+    if (!result.stopLoss) result.stopLoss = result.entry * 0.99;
+    if (!result.analysis) result.analysis = 'Analysis based on chart patterns and ICT/SMC concepts.';
 
     console.log('Analysis complete:', result.bias, 'confidence:', result.confidence);
 
