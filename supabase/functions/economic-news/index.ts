@@ -6,75 +6,115 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const JBLANKET_API_KEY = Deno.env.get("JBLANKET_API_KEY");
-
-// JBlanked calendar API (previous domain appears deprecated)
-const BASE_URL = "https://www.jblanked.com/news/api";
+const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
 
 type Action = "upcoming" | "ongoing" | "previous" | "all";
 
-type RawJBlankedEvent = {
-  Id?: string | number;
-  Name?: string;
-  Currency?: string;
-  Date?: string; // YYYY.MM.DD HH:mm:ss
-  Actual?: string | number | null;
-  Forecast?: string | number | null;
-  Previous?: string | number | null;
-  Strength?: string | null;
-  Impact?: string | null;
-};
-
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
+interface EconomicEvent {
+  id: string;
+  title: string;
+  country: string;
+  date: string;
+  time: string;
+  impact: "high" | "medium" | "low";
+  forecast?: string | number;
+  previous?: string | number;
+  actual?: string | number;
 }
 
-function toYMD(d: Date) {
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
-}
+function getPromptForAction(action: Action): string {
+  const today = new Date().toISOString().split('T')[0];
+  
+  const basePrompt = `You are an economic calendar data provider. Return ONLY a valid JSON array of economic events with no markdown formatting, no code blocks, and no explanations.
 
-function parseJBlankedDate(value?: string) {
-  // Expected: "YYYY.MM.DD HH:mm:ss"
-  if (!value) return { date: toYMD(new Date()), time: "00:00" };
+Each event must have these exact fields:
+- id: unique string identifier
+- title: event name (e.g., "US Non-Farm Payrolls", "ECB Interest Rate Decision")
+- country: 3-letter currency code (USD, EUR, GBP, JPY, etc.)
+- date: YYYY-MM-DD format
+- time: HH:MM format (24-hour UTC)
+- impact: "high", "medium", or "low"
+- forecast: expected value (number or string like "2.5%" or "250K"), null if not available
+- previous: previous release value, null if not available
+- actual: actual released value, null if not yet released
 
-  const [datePart, timePart] = value.split(" ");
-  const [y, m, d] = (datePart ?? "").split(".").map((x) => Number(x));
+Today's date is ${today}.`;
 
-  if (!y || !m || !d) return { date: toYMD(new Date()), time: "00:00" };
-
-  const date = `${y}-${pad2(m)}-${pad2(d)}`;
-  const time = (timePart ?? "00:00").slice(0, 5);
-  return { date, time };
-}
-
-function toImpact(raw?: RawJBlankedEvent) {
-  const s = String(raw?.Strength ?? raw?.Impact ?? "").toLowerCase();
-  if (s.includes("strong") || s.includes("high")) return "high";
-  if (s.includes("moderate") || s.includes("medium")) return "medium";
-  if (s.includes("low")) return "low";
-  return "medium";
-}
-
-function getEndpoint(action: Action) {
   switch (action) {
-    case "ongoing":
-      return `${BASE_URL}/mql5/calendar/today/`;
     case "upcoming":
+      return `${basePrompt}
+
+Return 15-20 upcoming economic events scheduled for the next 7 days that have NOT been released yet (actual should be null). Focus on high-impact events from major economies (US, EU, UK, Japan, China, Canada, Australia).
+
+Return ONLY the JSON array, nothing else.`;
+
+    case "ongoing":
+      return `${basePrompt}
+
+Return 5-10 economic events happening TODAY (${today}). Include both events that have been released today (with actual values) and events still pending today (actual is null).
+
+Return ONLY the JSON array, nothing else.`;
+
+    case "previous":
+      return `${basePrompt}
+
+Return 15-20 economic events that were released in the past 7 days. These MUST have actual values filled in. Focus on high-impact events from major economies.
+
+Return ONLY the JSON array, nothing else.`;
+
     case "all":
-      return `${BASE_URL}/mql5/calendar/week/`;
-    case "previous": {
-      const now = new Date();
-      const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-      const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
-      return `${BASE_URL}/mql5/calendar/range/?from=${toYMD(from)}&to=${toYMD(to)}`;
-    }
     default:
-      return `${BASE_URL}/mql5/calendar/week/`;
+      return `${basePrompt}
+
+Return 25-30 economic events including:
+- 10 upcoming events (next 7 days, actual is null)
+- 5 events from today
+- 10 recently released events (past 7 days, with actual values)
+
+Focus on high-impact events from major economies (US, EU, UK, Japan, China, Canada, Australia).
+
+Return ONLY the JSON array, nothing else.`;
+  }
+}
+
+function parsePerplexityResponse(content: string): EconomicEvent[] {
+  // Remove any markdown code blocks if present
+  let cleaned = content.trim();
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.slice(7);
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.slice(3);
+  }
+  if (cleaned.endsWith("```")) {
+    cleaned = cleaned.slice(0, -3);
+  }
+  cleaned = cleaned.trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) {
+      console.error("Parsed response is not an array");
+      return [];
+    }
+    
+    return parsed.map((ev: any, index: number) => ({
+      id: String(ev.id || `event-${index}`),
+      title: String(ev.title || "Unknown Event"),
+      country: String(ev.country || "USD").toUpperCase().slice(0, 3),
+      date: String(ev.date || new Date().toISOString().split('T')[0]),
+      time: String(ev.time || "00:00").slice(0, 5),
+      impact: ["high", "medium", "low"].includes(ev.impact) ? ev.impact : "medium",
+      forecast: ev.forecast ?? undefined,
+      previous: ev.previous ?? undefined,
+      actual: ev.actual ?? undefined,
+    }));
+  } catch (e) {
+    console.error("Failed to parse Perplexity response:", e, "Content:", cleaned.slice(0, 500));
+    return [];
   }
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -85,44 +125,41 @@ serve(async (req) => {
 
     console.log(`Economic news request: action=${action}`);
 
-    if (!JBLANKET_API_KEY) {
-      throw new Error("JBlanked API key not configured");
+    if (!PERPLEXITY_API_KEY) {
+      throw new Error("Perplexity API key not configured");
     }
 
-    const url = getEndpoint(action);
-    console.log(`Fetching economic events from: ${url}`);
+    const prompt = getPromptForAction(action);
+    console.log(`Fetching economic events via Perplexity for action: ${action}`);
 
-    const res = await fetch(url, {
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
       headers: {
-        Authorization: `Api-Key ${JBLANKET_API_KEY}`,
+        "Authorization": `Bearer ${PERPLEXITY_API_KEY}`,
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        model: "sonar",
+        messages: [
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.1,
+      }),
     });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Upstream API error (${res.status}): ${text || res.statusText}`);
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Perplexity API error (${response.status}): ${text || response.statusText}`);
     }
 
-    const raw = (await res.json()) as unknown;
-    const rawEvents: RawJBlankedEvent[] = Array.isArray(raw) ? (raw as RawJBlankedEvent[]) : [];
+    const result = await response.json();
+    const content = result.choices?.[0]?.message?.content || "[]";
+    
+    console.log("Perplexity raw response length:", content.length);
+    
+    const data = parsePerplexityResponse(content);
 
-    const data = rawEvents.map((ev, index) => {
-      const { date, time } = parseJBlankedDate(ev.Date);
-      return {
-        id: String(ev.Id ?? index),
-        title: ev.Name ?? "Unknown Event",
-        country: ev.Currency ?? "USD",
-        date,
-        time,
-        impact: toImpact(ev),
-        forecast: ev.Forecast ?? undefined,
-        previous: ev.Previous ?? undefined,
-        actual: ev.Actual ?? undefined,
-      };
-    });
-
-    console.log(`Successfully fetched ${data.length} events for action: ${action}`);
+    console.log(`Successfully parsed ${data.length} events for action: ${action}`);
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -131,7 +168,6 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Error in economic-news function:", errorMessage);
 
-    // Return 200 so the frontend can gracefully fall back without surfacing a hard function error.
     return new Response(JSON.stringify({ data: [], error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
