@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignalAnalysis } from '@/lib/types';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 type AnalysisType = 'intraday' | 'swing' | 'positional';
 
@@ -33,6 +34,20 @@ export const SignalGenerator: React.FC = () => {
     }
   };
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data:image/...;base64, prefix
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
   const handleAnalyze = async () => {
     if (!isAuthenticated) {
       setAuthMode('login');
@@ -47,30 +62,53 @@ export const SignalGenerator: React.FC = () => {
 
     setLoading(true);
     
-    // Simulate AI analysis
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    // Mock analysis result
-    const mockAnalysis: SignalAnalysis = {
-      type: analysisType,
-      entry: 1.0850,
-      takeProfit: 1.0920,
-      stopLoss: 1.0810,
-      bias: Math.random() > 0.5 ? 'bullish' : 'bearish',
-      confidence: Math.floor(Math.random() * 30) + 70,
-      analysis: `Based on Price Action, ICT concepts, and SMC analysis:
-      
-• **Market Structure**: The market shows a clear ${Math.random() > 0.5 ? 'bullish' : 'bearish'} structure with higher highs and higher lows.
-• **Order Blocks**: Identified a strong ${Math.random() > 0.5 ? 'bullish' : 'bearish'} order block at the current level.
-• **Fair Value Gap**: Price is approaching a significant FVG that could act as a magnet.
-• **Liquidity**: Multiple liquidity pools identified above/below current price.
+    try {
+      // Convert images to base64
+      const [image1Base64, image2Base64] = await Promise.all([
+        fileToBase64(uploadedImages.tf1),
+        fileToBase64(uploadedImages.tf2)
+      ]);
 
-**Recommendation**: ${analysisType === 'intraday' ? 'Quick scalp opportunity' : analysisType === 'swing' ? 'Hold for 2-5 days' : 'Long-term position recommended'}.`,
-    };
-    
-    setAnalysis(mockAnalysis);
-    setLoading(false);
-    toast.success('Analysis complete!');
+      const timeframes = timeframeInfo[analysisType].timeframes;
+
+      // Call the DeepSeek analysis edge function
+      const { data, error } = await supabase.functions.invoke('analyze-chart', {
+        body: {
+          analysisType,
+          image1Base64,
+          image2Base64,
+          timeframe1: timeframes[0],
+          timeframe2: timeframes[1]
+        }
+      });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Failed to analyze charts');
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const analysisResult: SignalAnalysis = {
+        type: analysisType,
+        entry: data.entry,
+        takeProfit: data.takeProfit,
+        stopLoss: data.stopLoss,
+        bias: data.bias,
+        confidence: data.confidence,
+        analysis: data.analysis,
+      };
+      
+      setAnalysis(analysisResult);
+      toast.success('Analysis complete!');
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to analyze charts. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetAnalysis = () => {
