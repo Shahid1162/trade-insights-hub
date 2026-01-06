@@ -96,6 +96,13 @@ export const NewsCalendar: React.FC = () => {
 
   useEffect(() => {
     fetchEconomicNews(categoryFilter);
+    
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(() => {
+      fetchEconomicNews(categoryFilter);
+    }, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
   }, [categoryFilter]);
 
   const formatDate = (dateStr: string) => {
