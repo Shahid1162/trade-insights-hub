@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.economic-news]
 verify_jwt = false
 
+[functions.analyze-chart]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 54321
@@ -20,6 +23,3 @@ major_version = 15
 [studio]
 enabled = true
 port = 54323
-
-[functions.market-data]
-verify_jwt = false
