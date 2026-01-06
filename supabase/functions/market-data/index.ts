@@ -2,18 +2,33 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ALPHA_VANTAGE_API_KEY = Deno.env.get('ALPHA_VANTAGE_API_KEY');
-const BASE_URL = 'https://www.alphavantage.co/query';
+const ALPHA_VANTAGE_API_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
+const BASE_URL = "https://www.alphavantage.co/query";
 
 // Cache to reduce API calls (free tier: 25/day)
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-function getCached(key: string) {
+// Alpha Vantage free tier guidance: ~1 request / second burst limit
+const MIN_CALL_INTERVAL_MS = 1100;
+let lastCallAt = 0;
+
+class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RateLimitError";
+  }
+}
+
+function getCacheEntry(key: string) {
+  return cache.get(key) ?? null;
+}
+
+function getFreshCached(key: string) {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     console.log(`Cache hit for ${key}`);
@@ -26,213 +41,280 @@ function setCache(key: string, data: any) {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
+function isRateLimitedPayload(payload: any) {
+  return Boolean(payload?.Note || payload?.Information);
+}
+
+async function alphaFetchJson(url: string) {
+  const now = Date.now();
+  const waitMs = MIN_CALL_INTERVAL_MS - (now - lastCallAt);
+  if (waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  lastCallAt = Date.now();
+
+  const res = await fetch(url);
+  return await res.json();
+}
+
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Keep these outside try so the catch can reference them for fallbacks.
+  let action: string | undefined;
+  let symbol: string | undefined;
+  let market: string | undefined;
+  let cacheKey: string | undefined;
+
   try {
-    const { action, symbol, market } = await req.json();
+    const body = await req.json();
+    action = body?.action;
+    symbol = body?.symbol;
+    market = body?.market;
+
     console.log(`Market data request: action=${action}, symbol=${symbol}, market=${market}`);
 
     if (!ALPHA_VANTAGE_API_KEY) {
-      throw new Error('Alpha Vantage API key not configured');
+      throw new Error("Alpha Vantage API key not configured");
     }
 
-    const cacheKey = `${action}:${symbol}`;
-    const cachedData = getCached(cacheKey);
-    if (cachedData) {
-      return new Response(JSON.stringify({ data: cachedData, cached: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    cacheKey = `${action}:${symbol}`;
+
+    const freshCached = getFreshCached(cacheKey);
+    if (freshCached) {
+      return new Response(JSON.stringify({ data: freshCached, cached: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    let data;
+    let data: any;
 
     switch (action) {
-      case 'quote':
+      case "quote": {
         const quoteUrl = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Fetching quote for ${symbol}`);
-        const quoteResponse = await fetch(quoteUrl);
-        const quoteData = await quoteResponse.json();
+
+        const quoteData = await alphaFetchJson(quoteUrl);
         console.log(`Quote response for ${symbol}:`, JSON.stringify(quoteData));
-        
-        if (quoteData['Note'] || quoteData['Information']) {
-          console.log('API rate limit reached:', quoteData['Note'] || quoteData['Information']);
-          throw new Error('API rate limit reached. Please try again later.');
+
+        if (isRateLimitedPayload(quoteData)) {
+          console.log("API rate limit reached:", quoteData?.Note || quoteData?.Information);
+          throw new RateLimitError("API rate limit reached. Please try again later.");
         }
-        
-        if (quoteData['Global Quote'] && quoteData['Global Quote']['05. price']) {
-          const q = quoteData['Global Quote'];
+
+        if (quoteData?.["Global Quote"]?.["05. price"]) {
+          const q = quoteData["Global Quote"];
           data = {
-            symbol: q['01. symbol'],
-            price: parseFloat(q['05. price']),
-            change: parseFloat(q['09. change']),
-            changePercent: parseFloat(q['10. change percent']?.replace('%', '') || '0'),
-            high: parseFloat(q['03. high']),
-            low: parseFloat(q['04. low']),
-            volume: parseInt(q['06. volume']),
+            symbol: q["01. symbol"],
+            price: parseFloat(q["05. price"]),
+            change: parseFloat(q["09. change"]),
+            changePercent: parseFloat(String(q["10. change percent"] ?? "0").replace("%", "")),
+            high: parseFloat(q["03. high"]),
+            low: parseFloat(q["04. low"]),
+            volume: parseInt(q["06. volume"]),
           };
         } else {
-          console.log('No valid quote data found for', symbol);
+          console.log("No valid quote data found for", symbol);
           data = null;
         }
         break;
+      }
 
-      case 'search':
-        const searchUrl = `${BASE_URL}?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(symbol)}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+      case "search": {
+        const searchUrl = `${BASE_URL}?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(
+          String(symbol ?? "")
+        )}&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Searching for ${symbol}`);
-        const searchResponse = await fetch(searchUrl);
-        const searchData = await searchResponse.json();
-        
-        if (searchData['Note'] || searchData['Information']) {
-          console.log('API rate limit reached');
-          throw new Error('API rate limit reached. Please try again later.');
-        }
-        
-        if (searchData.bestMatches) {
-          data = searchData.bestMatches.map((match: any) => ({
-            symbol: match['1. symbol'],
-            name: match['2. name'],
-            type: match['3. type'],
-            region: match['4. region'],
-            currency: match['8. currency'],
-          }));
-        } else {
-          data = [];
-        }
-        break;
 
-      case 'crypto':
+        const searchData = await alphaFetchJson(searchUrl);
+
+        if (isRateLimitedPayload(searchData)) {
+          console.log("API rate limit reached");
+          throw new RateLimitError("API rate limit reached. Please try again later.");
+        }
+
+        data = Array.isArray(searchData?.bestMatches)
+          ? searchData.bestMatches.map((match: any) => ({
+              symbol: match["1. symbol"],
+              name: match["2. name"],
+              type: match["3. type"],
+              region: match["4. region"],
+              currency: match["8. currency"],
+            }))
+          : [];
+        break;
+      }
+
+      case "crypto": {
         const cryptoUrl = `${BASE_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${symbol}&to_currency=USD&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Fetching crypto rate for ${symbol}`);
-        const cryptoResponse = await fetch(cryptoUrl);
-        const cryptoData = await cryptoResponse.json();
+
+        const cryptoData = await alphaFetchJson(cryptoUrl);
         console.log(`Crypto response for ${symbol}:`, JSON.stringify(cryptoData));
-        
-        if (cryptoData['Note'] || cryptoData['Information']) {
-          console.log('API rate limit reached');
-          throw new Error('API rate limit reached. Please try again later.');
+
+        if (isRateLimitedPayload(cryptoData)) {
+          console.log("API rate limit reached");
+          throw new RateLimitError("API rate limit reached. Please try again later.");
         }
-        
-        if (cryptoData['Realtime Currency Exchange Rate']) {
-          const rate = cryptoData['Realtime Currency Exchange Rate'];
+
+        if (cryptoData?.["Realtime Currency Exchange Rate"]) {
+          const rate = cryptoData["Realtime Currency Exchange Rate"];
           data = {
-            symbol: rate['1. From_Currency Code'],
-            name: rate['2. From_Currency Name'],
-            price: parseFloat(rate['5. Exchange Rate']),
-            bidPrice: parseFloat(rate['8. Bid Price']),
-            askPrice: parseFloat(rate['9. Ask Price']),
+            symbol: rate["1. From_Currency Code"],
+            name: rate["2. From_Currency Name"],
+            price: parseFloat(rate["5. Exchange Rate"]),
+            bidPrice: parseFloat(rate["8. Bid Price"]),
+            askPrice: parseFloat(rate["9. Ask Price"]),
           };
         } else {
-          console.log('No valid crypto data found for', symbol);
+          console.log("No valid crypto data found for", symbol);
           data = null;
         }
         break;
+      }
 
-      case 'forex':
-        const [fromCurrency, toCurrency] = symbol.split('/');
+      case "forex": {
+        const [fromCurrency, toCurrency] = String(symbol ?? "").split("/");
         const forexUrl = `${BASE_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${fromCurrency}&to_currency=${toCurrency}&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Fetching forex rate for ${symbol}`);
-        const forexResponse = await fetch(forexUrl);
-        const forexData = await forexResponse.json();
-        
-        if (forexData['Note'] || forexData['Information']) {
-          throw new Error('API rate limit reached. Please try again later.');
+
+        const forexData = await alphaFetchJson(forexUrl);
+
+        if (isRateLimitedPayload(forexData)) {
+          throw new RateLimitError("API rate limit reached. Please try again later.");
         }
-        
-        if (forexData['Realtime Currency Exchange Rate']) {
-          const rate = forexData['Realtime Currency Exchange Rate'];
+
+        if (forexData?.["Realtime Currency Exchange Rate"]) {
+          const rate = forexData["Realtime Currency Exchange Rate"];
           data = {
-            symbol: `${rate['1. From_Currency Code']}/${rate['3. To_Currency Code']}`,
-            price: parseFloat(rate['5. Exchange Rate']),
-            bidPrice: parseFloat(rate['8. Bid Price']),
-            askPrice: parseFloat(rate['9. Ask Price']),
+            symbol: `${rate["1. From_Currency Code"]}/${rate["3. To_Currency Code"]}`,
+            price: parseFloat(rate["5. Exchange Rate"]),
+            bidPrice: parseFloat(rate["8. Bid Price"]),
+            askPrice: parseFloat(rate["9. Ask Price"]),
           };
         } else {
           data = null;
         }
         break;
+      }
 
-      case 'intraday':
+      case "intraday": {
         const intradayUrl = `${BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=5min&apikey=${ALPHA_VANTAGE_API_KEY}`;
         console.log(`Fetching intraday data for ${symbol}`);
-        const intradayResponse = await fetch(intradayUrl);
-        const intradayData = await intradayResponse.json();
-        
-        if (intradayData['Note'] || intradayData['Information']) {
-          throw new Error('API rate limit reached. Please try again later.');
+
+        const intradayData = await alphaFetchJson(intradayUrl);
+
+        if (isRateLimitedPayload(intradayData)) {
+          throw new RateLimitError("API rate limit reached. Please try again later.");
         }
-        
-        const timeSeries = intradayData['Time Series (5min)'];
+
+        const timeSeries = intradayData?.["Time Series (5min)"];
         if (timeSeries) {
-          data = Object.entries(timeSeries).slice(0, 50).map(([time, values]: [string, any]) => ({
-            time: new Date(time).getTime() / 1000,
-            open: parseFloat(values['1. open']),
-            high: parseFloat(values['2. high']),
-            low: parseFloat(values['3. low']),
-            close: parseFloat(values['4. close']),
-            volume: parseInt(values['5. volume']),
-          })).reverse();
+          data = Object.entries(timeSeries)
+            .slice(0, 50)
+            .map(([time, values]: [string, any]) => ({
+              time: new Date(time).getTime() / 1000,
+              open: parseFloat(values["1. open"]),
+              high: parseFloat(values["2. high"]),
+              low: parseFloat(values["3. low"]),
+              close: parseFloat(values["4. close"]),
+              volume: parseInt(values["5. volume"]),
+            }))
+            .reverse();
         } else {
           data = [];
         }
         break;
+      }
 
-      case 'batch':
-        const symbols = symbol.split(',');
+      case "batch": {
+        const symbols = String(symbol ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
         console.log(`Batch fetching ${symbols.length} symbols:`, symbols);
-        data = [];
-        
+        data = [] as any[];
+
         for (const sym of symbols.slice(0, 5)) {
+          const perKey = `quote:${sym}`;
+          const cached = getFreshCached(perKey);
+          if (cached) {
+            data.push(cached);
+            continue;
+          }
+
+          const url = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${sym}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+
           try {
-            const trimmedSym = sym.trim();
-            const url = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${trimmedSym}&apikey=${ALPHA_VANTAGE_API_KEY}`;
-            const response = await fetch(url);
-            const result = await response.json();
-            console.log(`Batch result for ${trimmedSym}:`, JSON.stringify(result));
-            
-            if (result['Note'] || result['Information']) {
-              console.log('API rate limit reached during batch');
+            const result = await alphaFetchJson(url);
+            console.log(`Batch result for ${sym}:`, JSON.stringify(result));
+
+            if (isRateLimitedPayload(result)) {
+              console.log("API rate limit reached during batch");
               break; // Stop if rate limited
             }
-            
-            if (result['Global Quote'] && result['Global Quote']['05. price']) {
-              const q = result['Global Quote'];
-              data.push({
-                symbol: q['01. symbol'],
-                price: parseFloat(q['05. price']),
-                change: parseFloat(q['09. change']),
-                changePercent: parseFloat(q['10. change percent']?.replace('%', '') || '0'),
-              });
+
+            if (result?.["Global Quote"]?.["05. price"]) {
+              const q = result["Global Quote"];
+              const qData = {
+                symbol: q["01. symbol"],
+                price: parseFloat(q["05. price"]),
+                change: parseFloat(q["09. change"]),
+                changePercent: parseFloat(String(q["10. change percent"] ?? "0").replace("%", "")),
+              };
+              data.push(qData);
+              setCache(perKey, qData);
             }
-            await new Promise(resolve => setTimeout(resolve, 300));
           } catch (e) {
             console.error(`Error fetching ${sym}:`, e);
           }
         }
         break;
+      }
 
       default:
         throw new Error(`Unknown action: ${action}`);
     }
 
-    // Cache successful results
-    if (data) {
+    // Cache successful results (avoid caching null/empty-only payloads)
+    if (data !== null && data !== undefined && !(Array.isArray(data) && data.length === 0)) {
       setCache(cacheKey, data);
     }
 
-    console.log(`Successfully fetched data for action: ${action}, data:`, data ? 'present' : 'null');
-    return new Response(JSON.stringify({ data }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.log(`Successfully fetched data for action: ${action}, data:`, data ? "present" : "null");
 
+    return new Response(JSON.stringify({ data }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Error in market-data function:', errorMessage);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Error in market-data function:", errorMessage);
+
+    // IMPORTANT: avoid hard 500s for rate-limit situations to prevent blank screens.
+    if (error instanceof RateLimitError && cacheKey) {
+      const fallback = getCacheEntry(cacheKey);
+      const fallbackData = fallback?.data ?? null;
+
+      return new Response(
+        JSON.stringify({
+          data: fallbackData,
+          error: errorMessage,
+          rateLimited: true,
+          cached: Boolean(fallback),
+          stale: Boolean(fallback),
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
