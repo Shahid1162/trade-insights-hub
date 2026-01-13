@@ -1,81 +1,46 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Globe, IndianRupee, Bitcoin, RefreshCw, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { Bitcoin, RefreshCw, AlertCircle, Wifi, WifiOff, Search } from 'lucide-react';
 import { MarketSection } from './MarketSection';
+import { CryptoChartModal } from './CryptoChartModal';
 import { Stock } from '@/lib/types';
-import { batchFetchQuotes, getCryptoQuote } from '@/lib/marketApi';
+import { getCryptoPrices, searchCrypto, CryptoTicker } from '@/lib/binanceApi';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useRealtimePrices, simulatePriceMovement } from '@/hooks/useRealtimePrices';
 
 // Fallback mock data when API fails
-const fallbackIndianStocks: Stock[] = [
-  { symbol: 'RELIANCE.BSE', name: 'Reliance Industries', price: 2456.75, change: 34.50, changePercent: 1.42, market: 'indian' },
-  { symbol: 'TCS.BSE', name: 'Tata Consultancy Services', price: 3890.20, change: -45.30, changePercent: -1.15, market: 'indian' },
-  { symbol: 'INFY.BSE', name: 'Infosys Limited', price: 1567.80, change: 23.45, changePercent: 1.52, market: 'indian' },
-  { symbol: 'HDFC.BSE', name: 'HDFC Bank', price: 1678.90, change: 12.30, changePercent: 0.74, market: 'indian' },
-];
-
-const fallbackUsStocks: Stock[] = [
-  { symbol: 'AAPL', name: 'Apple Inc.', price: 178.50, change: 2.34, changePercent: 1.33, market: 'us' },
-  { symbol: 'MSFT', name: 'Microsoft Corporation', price: 378.90, change: -5.67, changePercent: -1.47, market: 'us' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', price: 140.25, change: 3.45, changePercent: 2.52, market: 'us' },
-  { symbol: 'NVDA', name: 'NVIDIA Corporation', price: 495.80, change: 12.45, changePercent: 2.58, market: 'us' },
-];
-
 const fallbackCryptoAssets: Stock[] = [
   { symbol: 'BTC', name: 'Bitcoin', price: 43567.89, change: 1234.56, changePercent: 2.92, market: 'crypto' },
   { symbol: 'ETH', name: 'Ethereum', price: 2345.67, change: -78.90, changePercent: -3.25, market: 'crypto' },
   { symbol: 'SOL', name: 'Solana', price: 98.45, change: 5.67, changePercent: 6.11, market: 'crypto' },
   { symbol: 'BNB', name: 'Binance Coin', price: 312.34, change: 8.90, changePercent: 2.93, market: 'crypto' },
+  { symbol: 'XRP', name: 'Ripple', price: 0.62, change: 0.03, changePercent: 5.12, market: 'crypto' },
+  { symbol: 'ADA', name: 'Cardano', price: 0.45, change: -0.02, changePercent: -4.23, market: 'crypto' },
+  { symbol: 'DOGE', name: 'Dogecoin', price: 0.08, change: 0.01, changePercent: 12.5, market: 'crypto' },
+  { symbol: 'DOT', name: 'Polkadot', price: 7.23, change: 0.34, changePercent: 4.93, market: 'crypto' },
 ];
 
-const stockSymbols = {
-  indian: ['RELIANCE.BSE', 'TCS.BSE', 'INFY', 'HDFCBANK.BSE'],
-  us: ['AAPL', 'MSFT', 'GOOGL', 'NVDA'],
-};
-
-const cryptoSymbols = ['BTC', 'ETH', 'SOL', 'BNB'];
-
-const stockNames: Record<string, string> = {
-  'RELIANCE.BSE': 'Reliance Industries',
-  'TCS.BSE': 'Tata Consultancy Services',
-  'INFY': 'Infosys Limited',
-  'HDFCBANK.BSE': 'HDFC Bank',
-  'AAPL': 'Apple Inc.',
-  'MSFT': 'Microsoft Corporation',
-  'GOOGL': 'Alphabet Inc.',
-  'NVDA': 'NVIDIA Corporation',
-  'BTC': 'Bitcoin',
-  'ETH': 'Ethereum',
-  'SOL': 'Solana',
-  'BNB': 'Binance Coin',
-};
-
 export const Dashboard: React.FC = () => {
-  const [indianStocks, setIndianStocks] = useState<Stock[]>(fallbackIndianStocks);
-  const [usStocks, setUsStocks] = useState<Stock[]>(fallbackUsStocks);
   const [cryptoAssets, setCryptoAssets] = useState<Stock[]>(fallbackCryptoAssets);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Stock[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  // Chart modal state
+  const [selectedCrypto, setSelectedCrypto] = useState<{ symbol: string; name: string } | null>(null);
 
   // Handle real-time price updates
   const handlePriceUpdate = useCallback((update: { stocks: Stock[]; market: 'indian' | 'us' | 'crypto'; timestamp: number }) => {
-    console.log('[Dashboard] Received price update:', update.market);
-    switch (update.market) {
-      case 'indian':
-        setIndianStocks(update.stocks);
-        break;
-      case 'us':
-        setUsStocks(update.stocks);
-        break;
-      case 'crypto':
-        setCryptoAssets(update.stocks);
-        break;
+    if (update.market === 'crypto') {
+      setCryptoAssets(update.stocks);
+      setLastUpdated(new Date(update.timestamp));
     }
-    setLastUpdated(new Date(update.timestamp));
   }, []);
 
   const { broadcastPriceUpdate } = useRealtimePrices({
@@ -86,68 +51,69 @@ export const Dashboard: React.FC = () => {
   const fetchMarketData = async () => {
     setLoading(true);
     try {
-      // Fetch US stocks
-      const usQuotes = await batchFetchQuotes(stockSymbols.us);
-      if (usQuotes.length > 0) {
-        const usData: Stock[] = usQuotes.map(q => ({
-          symbol: q.symbol,
-          name: stockNames[q.symbol] || q.symbol,
-          price: q.price,
-          change: q.change,
-          changePercent: q.changePercent,
-          market: 'us' as const,
+      const prices = await getCryptoPrices();
+      
+      if (prices.length > 0) {
+        const cryptoData: Stock[] = prices.map((p: CryptoTicker) => ({
+          symbol: p.symbol,
+          name: p.name,
+          price: p.price,
+          change: p.change,
+          changePercent: p.changePercent,
+          market: 'crypto' as const,
         }));
-        setUsStocks(usData);
+        
+        setCryptoAssets(cryptoData);
         setIsLive(true);
         
         // Broadcast to other clients
         broadcastPriceUpdate({
-          stocks: usData,
-          market: 'us',
-          timestamp: Date.now(),
-        });
-      }
-
-      // Fetch crypto
-      const cryptoData: Stock[] = [];
-      for (const symbol of cryptoSymbols.slice(0, 2)) {
-        const quote = await getCryptoQuote(symbol);
-        if (quote) {
-          const mockChange = (Math.random() - 0.5) * quote.price * 0.05;
-          cryptoData.push({
-            symbol: quote.symbol,
-            name: quote.name || stockNames[symbol] || symbol,
-            price: quote.price,
-            change: mockChange,
-            changePercent: (mockChange / quote.price) * 100,
-            market: 'crypto' as const,
-          });
-        }
-        await new Promise(r => setTimeout(r, 300));
-      }
-      
-      if (cryptoData.length > 0) {
-        const mergedCrypto = [...cryptoData, ...fallbackCryptoAssets.filter(
-          f => !cryptoData.some(c => c.symbol === f.symbol)
-        )];
-        setCryptoAssets(mergedCrypto);
-        
-        // Broadcast to other clients
-        broadcastPriceUpdate({
-          stocks: mergedCrypto,
+          stocks: cryptoData,
           market: 'crypto',
           timestamp: Date.now(),
         });
       }
 
       setLastUpdated(new Date());
-      toast.success('Market data refreshed');
+      toast.success('Live crypto data refreshed');
     } catch (error) {
       console.error('Error fetching market data:', error);
       toast.error('Failed to fetch live data, showing cached values');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Search for crypto
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await searchCrypto(searchQuery);
+      const searchData: Stock[] = results.map((r) => ({
+        symbol: r.symbol,
+        name: r.name,
+        price: 0,
+        change: 0,
+        changePercent: 0,
+        market: 'crypto' as const,
+      }));
+      setSearchResults(searchData);
+    } catch (error) {
+      console.error('Search error:', error);
+      toast.error('Search failed');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle crypto click to show chart
+  const handleCryptoClick = (symbol: string, name: string) => {
+    setSelectedCrypto({ symbol, name });
   };
 
   // Start/stop simulated real-time streaming
@@ -165,32 +131,34 @@ export const Dashboard: React.FC = () => {
     if (!isStreaming) return;
 
     const interval = setInterval(() => {
-      // Simulate price movements for all markets
-      const updatedIndian = simulatePriceMovement(indianStocks);
-      const updatedUs = simulatePriceMovement(usStocks);
       const updatedCrypto = simulatePriceMovement(cryptoAssets);
-
-      setIndianStocks(updatedIndian);
-      setUsStocks(updatedUs);
       setCryptoAssets(updatedCrypto);
       setLastUpdated(new Date());
-
-      // Broadcast updates to all connected clients
-      broadcastPriceUpdate({ stocks: updatedIndian, market: 'indian', timestamp: Date.now() });
-      broadcastPriceUpdate({ stocks: updatedUs, market: 'us', timestamp: Date.now() });
       broadcastPriceUpdate({ stocks: updatedCrypto, market: 'crypto', timestamp: Date.now() });
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isStreaming, indianStocks, usStocks, cryptoAssets, broadcastPriceUpdate]);
+  }, [isStreaming, cryptoAssets, broadcastPriceUpdate]);
 
   useEffect(() => {
     fetchMarketData();
-    const interval = setInterval(fetchMarketData, 5 * 60 * 1000);
+    const interval = setInterval(fetchMarketData, 30 * 1000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
-  const allStocks = [...indianStocks, ...usStocks, ...cryptoAssets];
+  // Search on enter key
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery) {
+        handleSearch();
+      } else {
+        setSearchResults([]);
+      }
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const displayedCryptos = searchResults.length > 0 ? searchResults : cryptoAssets;
 
   return (
     <div className="space-y-8">
@@ -200,8 +168,24 @@ export const Dashboard: React.FC = () => {
           Welcome to <span className="gradient-text">TA5</span>
         </h1>
         <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-          Your comprehensive trading analysis platform. Monitor markets, analyze signals, and make informed decisions.
+          Your comprehensive crypto trading analysis platform. Monitor live cryptocurrency prices and analyze candlestick charts.
         </p>
+      </div>
+
+      {/* Search Bar */}
+      <div className="flex items-center gap-2 max-w-md mx-auto animate-fade-in">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search cryptocurrency..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        {isSearching && (
+          <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+        )}
       </div>
 
       {/* Status Bar */}
@@ -220,7 +204,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-bullish animate-pulse' : isLive ? 'bg-bullish' : 'bg-amber-500'}`}></div>
             <span className="text-sm text-muted-foreground">
-              {isStreaming ? 'Streaming Live' : isLive ? 'Live Data' : 'Cached Data'}
+              {isStreaming ? 'Streaming Live' : isLive ? 'Binance Live' : 'Cached Data'}
             </span>
           </div>
           {lastUpdated && (
@@ -264,9 +248,9 @@ export const Dashboard: React.FC = () => {
         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 animate-fade-in">
           <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-amber-400">API Rate Limits</p>
+            <p className="text-sm font-medium text-amber-400">Connecting to Binance...</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Some data may be cached due to API limits. Click "Start Stream" for simulated real-time updates.
+              Fetching live cryptocurrency data from Binance. Click on any crypto to view the live candlestick chart.
             </p>
           </div>
         </div>
@@ -275,8 +259,12 @@ export const Dashboard: React.FC = () => {
       {/* Market Ticker */}
       <div className="relative overflow-hidden py-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
         <div className="flex animate-ticker gap-8">
-          {[...allStocks, ...allStocks].filter(s => s?.price != null).map((stock, i) => (
-            <div key={`${stock.symbol}-${i}`} className="flex items-center gap-3 whitespace-nowrap">
+          {[...cryptoAssets, ...cryptoAssets].filter(s => s?.price != null).map((stock, i) => (
+            <div 
+              key={`${stock.symbol}-${i}`} 
+              className="flex items-center gap-3 whitespace-nowrap cursor-pointer hover:text-primary transition-colors"
+              onClick={() => handleCryptoClick(stock.symbol, stock.name)}
+            >
               <span className="font-semibold">{stock.symbol}</span>
               <span className="font-mono">${(stock.price ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               <span className={(stock.change ?? 0) >= 0 ? 'text-bullish' : 'text-bearish'}>
@@ -287,24 +275,25 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Market Sections */}
+      {/* Crypto Section */}
       <div className="space-y-8">
-        <MarketSection
-          title="Indian Market"
-          icon={<IndianRupee className="w-5 h-5" />}
-          stocks={indianStocks}
-        />
-        <MarketSection
-          title="US Market"
-          icon={<Globe className="w-5 h-5" />}
-          stocks={usStocks}
-        />
         <MarketSection
           title="Cryptocurrency"
           icon={<Bitcoin className="w-5 h-5" />}
-          stocks={cryptoAssets}
+          stocks={displayedCryptos}
+          onStockClick={handleCryptoClick}
         />
       </div>
+
+      {/* Chart Modal */}
+      {selectedCrypto && (
+        <CryptoChartModal
+          open={!!selectedCrypto}
+          onClose={() => setSelectedCrypto(null)}
+          symbol={selectedCrypto.symbol}
+          name={selectedCrypto.name}
+        />
+      )}
     </div>
   );
 };

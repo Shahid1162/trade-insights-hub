@@ -6,9 +6,10 @@ interface MarketSectionProps {
   title: string;
   icon: React.ReactNode;
   stocks: Stock[];
+  onStockClick?: (symbol: string, name: string) => void;
 }
 
-export const MarketSection: React.FC<MarketSectionProps> = ({ title, icon, stocks }) => {
+export const MarketSection: React.FC<MarketSectionProps> = ({ title, icon, stocks, onStockClick }) => {
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center gap-3">
@@ -19,7 +20,12 @@ export const MarketSection: React.FC<MarketSectionProps> = ({ title, icon, stock
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {stocks.map((stock, index) => (
-          <MarketCard key={stock.symbol} stock={stock} index={index} />
+          <MarketCard 
+            key={stock.symbol} 
+            stock={stock} 
+            index={index} 
+            onClick={onStockClick ? () => onStockClick(stock.symbol, stock.name) : undefined}
+          />
         ))}
       </div>
     </div>

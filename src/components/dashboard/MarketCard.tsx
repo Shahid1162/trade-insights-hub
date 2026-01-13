@@ -5,9 +5,10 @@ import { Stock } from '@/lib/types';
 interface MarketCardProps {
   stock: Stock;
   index: number;
+  onClick?: () => void;
 }
 
-export const MarketCard: React.FC<MarketCardProps> = ({ stock, index }) => {
+export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick }) => {
   const price = stock?.price ?? 0;
   const change = stock?.change ?? 0;
   const changePercent = stock?.changePercent ?? 0;
@@ -15,8 +16,9 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index }) => {
 
   return (
     <div
-      className="p-4 rounded-xl bg-card border border-border/50 hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 animate-fade-in"
+      className={`p-4 rounded-xl bg-card border border-border/50 hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 animate-fade-in ${onClick ? 'cursor-pointer' : ''}`}
       style={{ animationDelay: `${index * 50}ms` }}
+      onClick={onClick}
     >
       <div className="flex items-center justify-between mb-3">
         <div>
