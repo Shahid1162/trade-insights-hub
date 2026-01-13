@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, TrendingDown, RefreshCw, X, Maximize2, Minimize2 } from 'lucide-react';
@@ -33,18 +33,23 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ReturnType<IChartApi['addSeries']> | null>(null);
   
-  const [interval, setInterval] = useState('1m');
+  const [selectedInterval, setSelectedInterval] = useState('1m');
   const [ticker, setTicker] = useState<CryptoTicker | null>(null);
   const [loading, setLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(true);
+  const [chartReady, setChartReady] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!seriesRef.current) return;
+    
     setLoading(true);
     try {
       const [klines, tickerData] = await Promise.all([
-        getCryptoKlines(symbol, interval, 500),
+        getCryptoKlines(symbol, selectedInterval, 500),
         getCryptoTicker(symbol),
       ]);
+
+      console.log('Fetched klines:', klines.length, 'ticker:', tickerData?.price);
 
       if (tickerData) {
         setTicker(tickerData);
@@ -66,87 +71,80 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [symbol, selectedInterval]);
 
-  // Initialize chart
+  // Initialize chart after a short delay to ensure container is rendered
   useEffect(() => {
-    if (!open || !chartContainerRef.current) return;
-
-    // Clear previous chart
-    if (chartRef.current) {
-      chartRef.current.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
+    if (!open) {
+      setChartReady(false);
+      return;
     }
 
-    const container = chartContainerRef.current;
-    
-    // Create chart with proper sizing
-    const chart = createChart(container, {
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: 'rgba(255, 255, 255, 0.7)',
-      },
-      grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
-      },
-      width: container.clientWidth,
-      height: container.clientHeight,
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: interval === '1m',
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-      },
-      rightPriceScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-      },
-      crosshair: {
-        vertLine: {
-          color: 'rgba(255, 255, 255, 0.3)',
-          labelBackgroundColor: 'hsl(var(--primary))',
-        },
-        horzLine: {
-          color: 'rgba(255, 255, 255, 0.3)',
-          labelBackgroundColor: 'hsl(var(--primary))',
-        },
-      },
-    });
+    // Small delay to ensure DialogContent is fully rendered
+    const initTimer = setTimeout(() => {
+      if (!chartContainerRef.current) return;
 
-    const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#10b981',
-      downColor: '#ef4444',
-      borderDownColor: '#ef4444',
-      borderUpColor: '#10b981',
-      wickDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-    });
-
-    chartRef.current = chart;
-    seriesRef.current = candlestickSeries;
-
-    // Fetch initial data
-    fetchData();
-
-    // Handle resize
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ 
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
-        });
+      // Clear previous chart
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+        seriesRef.current = null;
       }
-    };
-    
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(container);
 
-    // Auto-refresh every 3 seconds for live data
-    const refreshInterval = window.setInterval(fetchData, 3000);
+      const container = chartContainerRef.current;
+      const width = container.clientWidth || 800;
+      const height = container.clientHeight || 500;
+      
+      console.log('Creating chart with dimensions:', width, height);
+      
+      // Create chart
+      const chart = createChart(container, {
+        layout: {
+          background: { type: ColorType.Solid, color: 'transparent' },
+          textColor: 'rgba(255, 255, 255, 0.7)',
+        },
+        grid: {
+          vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
+          horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        },
+        width,
+        height,
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: selectedInterval === '1m',
+          borderColor: 'rgba(255, 255, 255, 0.1)',
+        },
+        rightPriceScale: {
+          borderColor: 'rgba(255, 255, 255, 0.1)',
+        },
+        crosshair: {
+          vertLine: {
+            color: 'rgba(255, 255, 255, 0.3)',
+            labelBackgroundColor: '#6366f1',
+          },
+          horzLine: {
+            color: 'rgba(255, 255, 255, 0.3)',
+            labelBackgroundColor: '#6366f1',
+          },
+        },
+      });
+
+      const candlestickSeries = chart.addSeries(CandlestickSeries, {
+        upColor: '#10b981',
+        downColor: '#ef4444',
+        borderDownColor: '#ef4444',
+        borderUpColor: '#10b981',
+        wickDownColor: '#ef4444',
+        wickUpColor: '#10b981',
+      });
+
+      chartRef.current = chart;
+      seriesRef.current = candlestickSeries;
+      setChartReady(true);
+    }, 100);
 
     return () => {
-      resizeObserver.disconnect();
-      window.clearInterval(refreshInterval);
+      clearTimeout(initTimer);
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
@@ -155,26 +153,51 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
     };
   }, [open, symbol]);
 
-  // Refetch when interval changes
+  // Fetch data when chart is ready or interval changes
   useEffect(() => {
-    if (open && chartRef.current) {
-      fetchData();
-    }
-  }, [interval]);
+    if (!chartReady || !open) return;
+
+    fetchData();
+
+    // Auto-refresh every 3 seconds
+    const refreshInterval = setInterval(fetchData, 3000);
+
+    return () => clearInterval(refreshInterval);
+  }, [chartReady, open, fetchData]);
+
+  // Handle resize
+  useEffect(() => {
+    if (!open || !chartRef.current || !chartContainerRef.current) return;
+
+    const handleResize = () => {
+      if (chartContainerRef.current && chartRef.current) {
+        const width = chartContainerRef.current.clientWidth;
+        const height = chartContainerRef.current.clientHeight;
+        if (width > 0 && height > 0) {
+          chartRef.current.applyOptions({ width, height });
+        }
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(chartContainerRef.current);
+
+    return () => resizeObserver.disconnect();
+  }, [open, chartReady]);
 
   const isPositive = (ticker?.change ?? 0) >= 0;
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent 
-        className={`p-0 border-border bg-background/95 backdrop-blur-xl ${
+        className={`flex flex-col p-0 border-border bg-background/95 backdrop-blur-xl ${
           isFullscreen 
             ? 'max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] rounded-none' 
             : 'max-w-6xl w-[95vw] h-[85vh]'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 shrink-0">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold text-primary">{symbol}</span>
@@ -219,14 +242,14 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
         </div>
 
         {/* Timeframe Controls */}
-        <div className="flex items-center gap-1 px-4 py-2 border-b border-border/50 bg-muted/30">
+        <div className="flex items-center gap-1 px-4 py-2 border-b border-border/50 bg-muted/30 shrink-0">
           {intervals.map((int) => (
             <Button
               key={int.value}
-              variant={interval === int.value ? 'default' : 'ghost'}
+              variant={selectedInterval === int.value ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setInterval(int.value)}
-              className={`px-3 py-1 h-8 ${interval === int.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setSelectedInterval(int.value)}
+              className={`px-3 py-1 h-8 ${selectedInterval === int.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
               {int.label}
             </Button>
@@ -236,13 +259,12 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
         {/* Chart Container */}
         <div 
           ref={chartContainerRef} 
-          className="flex-1 w-full"
-          style={{ height: 'calc(100% - 140px)' }}
+          className="flex-1 w-full min-h-[400px]"
         />
 
         {/* Stats Footer */}
         {ticker && (
-          <div className="grid grid-cols-4 gap-4 px-4 py-3 border-t border-border/50 bg-muted/30">
+          <div className="grid grid-cols-4 gap-4 px-4 py-3 border-t border-border/50 bg-muted/30 shrink-0">
             <div>
               <p className="text-xs text-muted-foreground">24h High</p>
               <p className="font-mono font-semibold text-bullish">
