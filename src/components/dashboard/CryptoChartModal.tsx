@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, X, Maximize2, Minimize2 } from 'lucide-react';
 import { createChart, ColorType, IChartApi, CandlestickData as LWCandlestickData, CandlestickSeries } from 'lightweight-charts';
 import { getCryptoKlines, getCryptoTicker, CryptoTicker, CandlestickData } from '@/lib/binanceApi';
 
@@ -14,12 +13,14 @@ interface CryptoChartModalProps {
 }
 
 const intervals = [
-  { value: '1m', label: '1 Min' },
-  { value: '5m', label: '5 Min' },
-  { value: '15m', label: '15 Min' },
-  { value: '1h', label: '1 Hour' },
-  { value: '4h', label: '4 Hour' },
-  { value: '1d', label: '1 Day' },
+  { value: '1m', label: '1m' },
+  { value: '5m', label: '5m' },
+  { value: '15m', label: '15m' },
+  { value: '30m', label: '30m' },
+  { value: '1h', label: '1H' },
+  { value: '4h', label: '4H' },
+  { value: '1d', label: '1D' },
+  { value: '1w', label: '1W' },
 ];
 
 export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
@@ -35,12 +36,13 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
   const [interval, setInterval] = useState('1m');
   const [ticker, setTicker] = useState<CryptoTicker | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(true);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const [klines, tickerData] = await Promise.all([
-        getCryptoKlines(symbol, interval, 200),
+        getCryptoKlines(symbol, interval, 500),
         getCryptoTicker(symbol),
       ]);
 
@@ -57,6 +59,7 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
           close: k.close,
         }));
         seriesRef.current.setData(formattedData);
+        chartRef.current?.timeScale().fitContent();
       }
     } catch (error) {
       console.error('Error fetching chart data:', error);
@@ -65,24 +68,48 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
     }
   };
 
+  // Initialize chart
   useEffect(() => {
     if (!open || !chartContainerRef.current) return;
 
-    // Create chart
-    const chart = createChart(chartContainerRef.current, {
+    // Clear previous chart
+    if (chartRef.current) {
+      chartRef.current.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+    }
+
+    const container = chartContainerRef.current;
+    
+    // Create chart with proper sizing
+    const chart = createChart(container, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: 'rgba(255, 255, 255, 0.7)',
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
       },
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
+      width: container.clientWidth,
+      height: container.clientHeight,
       timeScale: {
         timeVisible: true,
-        secondsVisible: false,
+        secondsVisible: interval === '1m',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+      },
+      rightPriceScale: {
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+      },
+      crosshair: {
+        vertLine: {
+          color: 'rgba(255, 255, 255, 0.3)',
+          labelBackgroundColor: 'hsl(var(--primary))',
+        },
+        horzLine: {
+          color: 'rgba(255, 255, 255, 0.3)',
+          labelBackgroundColor: 'hsl(var(--primary))',
+        },
       },
     });
 
@@ -104,16 +131,21 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+        chartRef.current.applyOptions({ 
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight,
+        });
       }
     };
-    window.addEventListener('resize', handleResize);
+    
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(container);
 
-    // Auto-refresh every 5 seconds for live data
-    const refreshInterval = window.setInterval(fetchData, 5000);
+    // Auto-refresh every 3 seconds for live data
+    const refreshInterval = window.setInterval(fetchData, 3000);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       window.clearInterval(refreshInterval);
       if (chartRef.current) {
         chartRef.current.remove();
@@ -123,8 +155,9 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
     };
   }, [open, symbol]);
 
+  // Refetch when interval changes
   useEffect(() => {
-    if (open) {
+    if (open && chartRef.current) {
       fetchData();
     }
   }, [interval]);
@@ -133,19 +166,27 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-4xl w-full bg-card border-border">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-xl font-bold">{symbol}/USDT</span>
-              <span className="text-muted-foreground text-sm">{name}</span>
+      <DialogContent 
+        className={`p-0 border-border bg-background/95 backdrop-blur-xl ${
+          isFullscreen 
+            ? 'max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] rounded-none' 
+            : 'max-w-6xl w-[95vw] h-[85vh]'
+        }`}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-bold text-primary">{symbol}</span>
+              <span className="text-muted-foreground">/USDT</span>
+              <span className="text-sm text-muted-foreground ml-2">{name}</span>
             </div>
             {ticker && (
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 ml-4">
                 <span className="text-2xl font-mono font-bold">
-                  ${ticker.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  ${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: ticker.price < 1 ? 6 : 2 })}
                 </span>
-                <div className={`flex items-center gap-1 ${isPositive ? 'text-bullish' : 'text-bearish'}`}>
+                <div className={`flex items-center gap-1 px-2 py-1 rounded ${isPositive ? 'bg-bullish/20 text-bullish' : 'bg-bearish/20 text-bearish'}`}>
                   {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                   <span className="font-medium">
                     {isPositive ? '+' : ''}{ticker.changePercent.toFixed(2)}%
@@ -153,68 +194,81 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({
                 </div>
               </div>
             )}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Controls */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Select value={interval} onValueChange={setInterval}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="Interval" />
-                </SelectTrigger>
-                <SelectContent>
-                  {intervals.map((int) => (
-                    <SelectItem key={int.value} value={int.value}>
-                      {int.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            {loading && <RefreshCw className="w-4 h-4 animate-spin text-primary" />}
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <div className="w-2 h-2 rounded-full bg-bullish animate-pulse"></div>
+              Live
             </div>
-            <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+            >
+              <X className="w-4 h-4" />
             </Button>
           </div>
-
-          {/* Chart */}
-          <div 
-            ref={chartContainerRef} 
-            className="w-full rounded-lg overflow-hidden bg-background/50"
-          />
-
-          {/* Stats */}
-          {ticker && (
-            <div className="grid grid-cols-4 gap-4 p-4 rounded-lg bg-background/50">
-              <div>
-                <p className="text-xs text-muted-foreground">24h High</p>
-                <p className="font-mono font-semibold text-bullish">
-                  ${ticker.high?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">24h Low</p>
-                <p className="font-mono font-semibold text-bearish">
-                  ${ticker.low?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">24h Change</p>
-                <p className={`font-mono font-semibold ${isPositive ? 'text-bullish' : 'text-bearish'}`}>
-                  ${Math.abs(ticker.change).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">24h Volume</p>
-                <p className="font-mono font-semibold">
-                  {ticker.volume?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Timeframe Controls */}
+        <div className="flex items-center gap-1 px-4 py-2 border-b border-border/50 bg-muted/30">
+          {intervals.map((int) => (
+            <Button
+              key={int.value}
+              variant={interval === int.value ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setInterval(int.value)}
+              className={`px-3 py-1 h-8 ${interval === int.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              {int.label}
+            </Button>
+          ))}
+        </div>
+
+        {/* Chart Container */}
+        <div 
+          ref={chartContainerRef} 
+          className="flex-1 w-full"
+          style={{ height: 'calc(100% - 140px)' }}
+        />
+
+        {/* Stats Footer */}
+        {ticker && (
+          <div className="grid grid-cols-4 gap-4 px-4 py-3 border-t border-border/50 bg-muted/30">
+            <div>
+              <p className="text-xs text-muted-foreground">24h High</p>
+              <p className="font-mono font-semibold text-bullish">
+                ${ticker.high?.toLocaleString(undefined, { maximumFractionDigits: ticker.high && ticker.high < 1 ? 6 : 2 })}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">24h Low</p>
+              <p className="font-mono font-semibold text-bearish">
+                ${ticker.low?.toLocaleString(undefined, { maximumFractionDigits: ticker.low && ticker.low < 1 ? 6 : 2 })}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">24h Change</p>
+              <p className={`font-mono font-semibold ${isPositive ? 'text-bullish' : 'text-bearish'}`}>
+                {isPositive ? '+' : ''}${ticker.change.toLocaleString(undefined, { maximumFractionDigits: ticker.change < 1 ? 6 : 2 })}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">24h Volume</p>
+              <p className="font-mono font-semibold">
+                {ticker.volume?.toLocaleString(undefined, { maximumFractionDigits: 0 })} {symbol}
+              </p>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
