@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +9,11 @@ const corsHeaders = {
 
 const ALPHA_VANTAGE_API_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
 const BASE_URL = "https://www.alphavantage.co/query";
+
+// Input validation constants
+const VALID_ACTIONS = ["quote", "search", "crypto", "forex", "intraday", "batch"];
+const MAX_SYMBOL_LENGTH = 20;
+const MAX_BATCH_SYMBOLS = 5;
 
 // Cache to reduce API calls (free tier: 25/day)
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -24,6 +30,14 @@ class RateLimitError extends Error {
   }
 }
 
+function sanitizeSymbol(input: any): string {
+  return String(input ?? "").replace(/[^A-Z0-9\/]/gi, "").toUpperCase().slice(0, MAX_SYMBOL_LENGTH);
+}
+
+function validateAction(action: any): boolean {
+  return VALID_ACTIONS.includes(String(action));
+}
+
 function getCacheEntry(key: string) {
   return cache.get(key) ?? null;
 }
@@ -31,7 +45,6 @@ function getCacheEntry(key: string) {
 function getFreshCached(key: string) {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log(`Cache hit for ${key}`);
     return cached.data;
   }
   return null;
@@ -65,16 +78,47 @@ serve(async (req) => {
   // Keep these outside try so the catch can reference them for fallbacks.
   let action: string | undefined;
   let symbol: string | undefined;
-  let market: string | undefined;
   let cacheKey: string | undefined;
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token);
+    
+    if (claimsError || !claimsData?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await req.json();
     action = body?.action;
-    symbol = body?.symbol;
-    market = body?.market;
+    symbol = sanitizeSymbol(body?.symbol);
 
-    console.log(`Market data request: action=${action}, symbol=${symbol}, market=${market}`);
+    // Validate action
+    if (!validateAction(action)) {
+      return new Response(JSON.stringify({ error: "Invalid action" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`User ${claimsData.user.id} market-data request: action=${action}`);
 
     if (!ALPHA_VANTAGE_API_KEY) {
       console.error("API key configuration issue");
@@ -97,14 +141,17 @@ serve(async (req) => {
 
     switch (action) {
       case "quote": {
-        const quoteUrl = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`;
-        console.log(`Fetching quote for ${symbol}`);
+        if (!symbol) {
+          return new Response(JSON.stringify({ error: "Symbol required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const quoteUrl = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${ALPHA_VANTAGE_API_KEY}`;
 
         const quoteData = await alphaFetchJson(quoteUrl);
-        console.log(`Quote response for ${symbol}:`, JSON.stringify(quoteData));
 
         if (isRateLimitedPayload(quoteData)) {
-          console.log("API rate limit reached:", quoteData?.Note || quoteData?.Information);
           throw new RateLimitError("API rate limit reached. Please try again later.");
         }
 
@@ -120,27 +167,23 @@ serve(async (req) => {
             volume: parseInt(q["06. volume"]),
           };
         } else {
-          console.log("No valid quote data found for", symbol);
           data = null;
         }
         break;
       }
 
       case "search": {
-        const searchUrl = `${BASE_URL}?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(
-          String(symbol ?? "")
-        )}&apikey=${ALPHA_VANTAGE_API_KEY}`;
-        console.log(`Searching for ${symbol}`);
+        const searchKeyword = String(body?.symbol ?? "").slice(0, 50);
+        const searchUrl = `${BASE_URL}?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(searchKeyword)}&apikey=${ALPHA_VANTAGE_API_KEY}`;
 
         const searchData = await alphaFetchJson(searchUrl);
 
         if (isRateLimitedPayload(searchData)) {
-          console.log("API rate limit reached");
           throw new RateLimitError("API rate limit reached. Please try again later.");
         }
 
         data = Array.isArray(searchData?.bestMatches)
-          ? searchData.bestMatches.map((match: any) => ({
+          ? searchData.bestMatches.slice(0, 20).map((match: any) => ({
               symbol: match["1. symbol"],
               name: match["2. name"],
               type: match["3. type"],
@@ -152,14 +195,17 @@ serve(async (req) => {
       }
 
       case "crypto": {
-        const cryptoUrl = `${BASE_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${symbol}&to_currency=USD&apikey=${ALPHA_VANTAGE_API_KEY}`;
-        console.log(`Fetching crypto rate for ${symbol}`);
+        if (!symbol) {
+          return new Response(JSON.stringify({ error: "Symbol required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const cryptoUrl = `${BASE_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${encodeURIComponent(symbol)}&to_currency=USD&apikey=${ALPHA_VANTAGE_API_KEY}`;
 
         const cryptoData = await alphaFetchJson(cryptoUrl);
-        console.log(`Crypto response for ${symbol}:`, JSON.stringify(cryptoData));
 
         if (isRateLimitedPayload(cryptoData)) {
-          console.log("API rate limit reached");
           throw new RateLimitError("API rate limit reached. Please try again later.");
         }
 
@@ -173,16 +219,20 @@ serve(async (req) => {
             askPrice: parseFloat(rate["9. Ask Price"]),
           };
         } else {
-          console.log("No valid crypto data found for", symbol);
           data = null;
         }
         break;
       }
 
       case "forex": {
-        const [fromCurrency, toCurrency] = String(symbol ?? "").split("/");
-        const forexUrl = `${BASE_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${fromCurrency}&to_currency=${toCurrency}&apikey=${ALPHA_VANTAGE_API_KEY}`;
-        console.log(`Fetching forex rate for ${symbol}`);
+        const [fromCurrency, toCurrency] = symbol.split("/");
+        if (!fromCurrency || !toCurrency) {
+          return new Response(JSON.stringify({ error: "Invalid forex pair format. Use FROM/TO" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const forexUrl = `${BASE_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${encodeURIComponent(fromCurrency)}&to_currency=${encodeURIComponent(toCurrency)}&apikey=${ALPHA_VANTAGE_API_KEY}`;
 
         const forexData = await alphaFetchJson(forexUrl);
 
@@ -205,8 +255,13 @@ serve(async (req) => {
       }
 
       case "intraday": {
-        const intradayUrl = `${BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=5min&apikey=${ALPHA_VANTAGE_API_KEY}`;
-        console.log(`Fetching intraday data for ${symbol}`);
+        if (!symbol) {
+          return new Response(JSON.stringify({ error: "Symbol required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const intradayUrl = `${BASE_URL}?function=TIME_SERIES_INTRADAY&symbol=${encodeURIComponent(symbol)}&interval=5min&apikey=${ALPHA_VANTAGE_API_KEY}`;
 
         const intradayData = await alphaFetchJson(intradayUrl);
 
@@ -234,15 +289,22 @@ serve(async (req) => {
       }
 
       case "batch": {
-        const symbols = String(symbol ?? "")
+        const symbols = String(body?.symbol ?? "")
           .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
+          .map((s) => sanitizeSymbol(s))
+          .filter(Boolean)
+          .slice(0, MAX_BATCH_SYMBOLS); // Limit to 5 symbols
 
-        console.log(`Batch fetching ${symbols.length} symbols:`, symbols);
+        if (symbols.length === 0) {
+          return new Response(JSON.stringify({ error: "At least one symbol required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         data = [] as any[];
 
-        for (const sym of symbols.slice(0, 5)) {
+        for (const sym of symbols) {
           const perKey = `quote:${sym}`;
           const cached = getFreshCached(perKey);
           if (cached) {
@@ -250,14 +312,12 @@ serve(async (req) => {
             continue;
           }
 
-          const url = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${sym}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+          const url = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(sym)}&apikey=${ALPHA_VANTAGE_API_KEY}`;
 
           try {
             const result = await alphaFetchJson(url);
-            console.log(`Batch result for ${sym}:`, JSON.stringify(result));
 
             if (isRateLimitedPayload(result)) {
-              console.log("API rate limit reached during batch");
               break; // Stop if rate limited
             }
 
@@ -273,22 +333,23 @@ serve(async (req) => {
               setCache(perKey, qData);
             }
           } catch (e) {
-            console.error(`Error fetching ${sym}:`, e);
+            console.error(`Error fetching symbol`);
           }
         }
         break;
       }
 
       default:
-        throw new Error(`Unknown action: ${action}`);
+        return new Response(JSON.stringify({ error: "Invalid action" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
     }
 
     // Cache successful results (avoid caching null/empty-only payloads)
     if (data !== null && data !== undefined && !(Array.isArray(data) && data.length === 0)) {
       setCache(cacheKey, data);
     }
-
-    console.log(`Successfully fetched data for action: ${action}, data:`, data ? "present" : "null");
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

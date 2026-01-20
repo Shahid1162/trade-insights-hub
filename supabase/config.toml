@@ -3,6 +3,9 @@ project_id = "wpmbepsngubducokghwn"
 [functions.market-data]
 verify_jwt = false
 
+[functions.binance-market]
+verify_jwt = false
+
 [functions.economic-news]
 verify_jwt = false
 
