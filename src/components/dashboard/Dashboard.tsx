@@ -1,19 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bitcoin, RefreshCw, Search, TrendingUp } from 'lucide-react';
+import { Bitcoin, RefreshCw } from 'lucide-react';
 import { MarketSection } from './MarketSection';
 import { CryptoChartModal } from './CryptoChartModal';
 import { Stock } from '@/lib/types';
-import { getCryptoPrices, searchCrypto, CryptoTicker } from '@/lib/binanceApi';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { getCryptoPrices, CryptoTicker } from '@/lib/binanceApi';
 
 export const Dashboard: React.FC = () => {
   const [cryptoAssets, setCryptoAssets] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Stock[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const initialFetchDone = useRef(false);
   
   // Chart modal state
@@ -45,32 +40,6 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Search for crypto
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const results = await searchCrypto(searchQuery);
-      const searchData: Stock[] = results.map((r) => ({
-        symbol: r.symbol,
-        name: r.name,
-        price: 0,
-        change: 0,
-        changePercent: 0,
-        market: 'crypto' as const,
-      }));
-      setSearchResults(searchData);
-    } catch (error) {
-      console.error('Search error:', error);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
   // Handle crypto click to show chart
   const handleCryptoClick = (symbol: string, name: string) => {
     setSelectedCrypto({ symbol, name });
@@ -87,20 +56,6 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Search with debounce
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchQuery) {
-        handleSearch();
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
-
-  const displayedCryptos = searchResults.length > 0 ? searchResults : cryptoAssets;
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -113,42 +68,17 @@ export const Dashboard: React.FC = () => {
         </p>
       </div>
 
-      {/* Search & Status Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search crypto..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-[200px]"
-            />
-          </div>
-          {isSearching && (
-            <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
-          )}
+      {/* Status Bar */}
+      <div className="flex items-center justify-center gap-4 p-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-bullish animate-pulse"></div>
+          <span className="text-sm text-muted-foreground">Live</span>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-bullish animate-pulse"></div>
-            <span className="text-sm text-muted-foreground">Live</span>
-          </div>
-          {lastUpdated && (
-            <span className="text-xs text-muted-foreground">
-              Updated: {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchMarketData(true)}
-            disabled={loading}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+        {lastUpdated && (
+          <span className="text-xs text-muted-foreground">
+            Updated: {lastUpdated.toLocaleTimeString()}
+          </span>
+        )}
       </div>
 
       {/* Loading State */}
@@ -183,12 +113,12 @@ export const Dashboard: React.FC = () => {
       )}
 
       {/* Crypto Section */}
-      {displayedCryptos.length > 0 && (
+      {cryptoAssets.length > 0 && (
         <div className="space-y-6">
           <MarketSection
             title="Cryptocurrency"
             icon={<Bitcoin className="w-5 h-5" />}
-            stocks={displayedCryptos}
+            stocks={cryptoAssets}
             onStockClick={handleCryptoClick}
           />
         </div>
