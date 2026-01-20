@@ -126,7 +126,11 @@ serve(async (req) => {
     console.log(`Economic news request: action=${action}`);
 
     if (!PERPLEXITY_API_KEY) {
-      throw new Error("Perplexity API key not configured");
+      console.error("API key configuration issue");
+      return new Response(JSON.stringify({ data: [], error: "Service temporarily unavailable" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const prompt = getPromptForAction(action);
@@ -148,8 +152,11 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new Error(`Perplexity API error (${response.status}): ${text || response.statusText}`);
+      console.error("External API error:", response.status);
+      return new Response(JSON.stringify({ data: [], error: "Service temporarily unavailable" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const result = await response.json();
@@ -165,10 +172,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Error in economic-news function:", errorMessage);
+    console.error("Function error:", error);
 
-    return new Response(JSON.stringify({ data: [], error: errorMessage }), {
+    return new Response(JSON.stringify({ data: [], error: "An error occurred processing your request" }), {
+      status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

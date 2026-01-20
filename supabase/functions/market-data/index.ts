@@ -77,7 +77,11 @@ serve(async (req) => {
     console.log(`Market data request: action=${action}, symbol=${symbol}, market=${market}`);
 
     if (!ALPHA_VANTAGE_API_KEY) {
-      throw new Error("Alpha Vantage API key not configured");
+      console.error("API key configuration issue");
+      return new Response(JSON.stringify({ error: "Service temporarily unavailable" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     cacheKey = `${action}:${symbol}`;
@@ -290,8 +294,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Error in market-data function:", errorMessage);
+    console.error("Function error:", error);
 
     // IMPORTANT: avoid hard 500s for rate-limit situations to prevent blank screens.
     if (error instanceof RateLimitError && cacheKey) {
@@ -301,7 +304,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           data: fallbackData,
-          error: errorMessage,
+          error: "Request limit reached. Please try again later.",
           rateLimited: true,
           cached: Boolean(fallback),
           stale: Boolean(fallback),
@@ -312,7 +315,7 @@ serve(async (req) => {
       );
     }
 
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: "An error occurred processing your request" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
