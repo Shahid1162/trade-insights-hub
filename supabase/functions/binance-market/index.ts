@@ -1,17 +1,39 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BINANCE_API_KEY = Deno.env.get("BINANCE_API_KEY");
-const BINANCE_API_SECRET = Deno.env.get("BINANCE_API_SECRET");
 const BINANCE_BASE_URL = "https://api.binance.com";
+
+// Input validation constants
+const VALID_ACTIONS = ["prices", "ticker", "klines", "search"];
+const VALID_INTERVALS = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"];
+const MAX_SYMBOL_LENGTH = 20;
+const MAX_LIMIT = 500;
+const MIN_LIMIT = 1;
 
 // Cache to reduce API calls
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 10 * 1000; // 10 seconds for live data
+
+function sanitizeSymbol(input: any): string {
+  return String(input ?? "").replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, MAX_SYMBOL_LENGTH);
+}
+
+function validateInterval(interval: any): string {
+  const sanitized = String(interval ?? "1m").toLowerCase();
+  return VALID_INTERVALS.includes(sanitized) ? sanitized : "1m";
+}
+
+function validateLimit(limit: any): number {
+  const num = parseInt(String(limit), 10);
+  if (isNaN(num) || num < MIN_LIMIT) return 100;
+  if (num > MAX_LIMIT) return MAX_LIMIT;
+  return num;
+}
 
 function getFreshCached(key: string) {
   const cached = cache.get(key);
@@ -31,11 +53,44 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token);
+    
+    if (claimsError || !claimsData?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await req.json();
     const action = body?.action;
-    const symbol = body?.symbol;
+    const symbol = sanitizeSymbol(body?.symbol);
 
-    console.log(`Binance request: action=${action}, symbol=${symbol}`);
+    // Validate action
+    if (!VALID_ACTIONS.includes(String(action))) {
+      return new Response(JSON.stringify({ error: "Invalid action" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`User ${claimsData.user.id} binance request: action=${action}`);
 
     const cacheKey = `${action}:${symbol}`;
     const cachedData = getFreshCached(cacheKey);
@@ -72,13 +127,19 @@ serve(async (req) => {
       }
 
       case "ticker": {
+        if (!symbol) {
+          return new Response(JSON.stringify({ error: "Symbol required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         // Get single ticker price
         const tickerSymbol = `${symbol}USDT`;
-        const response = await fetch(`${BINANCE_BASE_URL}/api/v3/ticker/24hr?symbol=${tickerSymbol}`);
+        const response = await fetch(`${BINANCE_BASE_URL}/api/v3/ticker/24hr?symbol=${encodeURIComponent(tickerSymbol)}`);
         const ticker = await response.json();
         
         if (ticker.code) {
-          console.error("Binance API error:", ticker.msg);
+          console.error("Binance API error");
           throw new Error("Failed to fetch data");
         }
         
@@ -96,18 +157,24 @@ serve(async (req) => {
       }
 
       case "klines": {
+        if (!symbol) {
+          return new Response(JSON.stringify({ error: "Symbol required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         // Get candlestick/kline data
         const klineSymbol = `${symbol}USDT`;
-        const interval = body?.interval || "1m";
-        const limit = body?.limit || 100;
+        const interval = validateInterval(body?.interval);
+        const limit = validateLimit(body?.limit);
         
         const response = await fetch(
-          `${BINANCE_BASE_URL}/api/v3/klines?symbol=${klineSymbol}&interval=${interval}&limit=${limit}`
+          `${BINANCE_BASE_URL}/api/v3/klines?symbol=${encodeURIComponent(klineSymbol)}&interval=${interval}&limit=${limit}`
         );
         const klines = await response.json();
         
         if (klines.code) {
-          console.error("Binance API error:", klines.msg);
+          console.error("Binance API error");
           throw new Error("Failed to fetch data");
         }
         
@@ -127,7 +194,7 @@ serve(async (req) => {
         const response = await fetch(`${BINANCE_BASE_URL}/api/v3/exchangeInfo`);
         const info = await response.json();
         
-        const searchTerm = symbol?.toUpperCase() || "";
+        const searchTerm = symbol || "";
         data = info.symbols
           .filter((s: any) => 
             s.quoteAsset === "USDT" && 
@@ -143,14 +210,15 @@ serve(async (req) => {
       }
 
       default:
-        throw new Error("Invalid request");
+        return new Response(JSON.stringify({ error: "Invalid action" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
     }
 
     if (data) {
       setCache(cacheKey, data);
     }
-
-    console.log(`Successfully fetched data for action: ${action}`);
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

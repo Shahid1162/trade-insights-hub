@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,7 +9,9 @@ const corsHeaders = {
 
 const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
 
-type Action = "upcoming" | "ongoing" | "previous" | "all";
+// Input validation
+const VALID_ACTIONS = ["upcoming", "ongoing", "previous", "all"] as const;
+type Action = typeof VALID_ACTIONS[number];
 
 interface EconomicEvent {
   id: string;
@@ -20,6 +23,11 @@ interface EconomicEvent {
   forecast?: string | number;
   previous?: string | number;
   actual?: string | number;
+}
+
+function validateAction(action: any): Action {
+  const sanitized = String(action ?? "all").toLowerCase();
+  return VALID_ACTIONS.includes(sanitized as Action) ? (sanitized as Action) : "all";
 }
 
 function getPromptForAction(action: Action): string {
@@ -99,7 +107,7 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
     
     return parsed.map((ev: any, index: number) => ({
       id: String(ev.id || `event-${index}`),
-      title: String(ev.title || "Unknown Event"),
+      title: String(ev.title || "Unknown Event").slice(0, 200),
       country: String(ev.country || "USD").toUpperCase().slice(0, 3),
       date: String(ev.date || new Date().toISOString().split('T')[0]),
       time: String(ev.time || "00:00").slice(0, 5),
@@ -109,7 +117,7 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
       actual: ev.actual ?? undefined,
     }));
   } catch (e) {
-    console.error("Failed to parse Perplexity response:", e, "Content:", cleaned.slice(0, 500));
+    console.error("Failed to parse response");
     return [];
   }
 }
@@ -120,10 +128,35 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const action = (body?.action ?? "all") as Action;
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ data: [], error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    console.log(`Economic news request: action=${action}`);
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token);
+    
+    if (claimsError || !claimsData?.user) {
+      return new Response(JSON.stringify({ data: [], error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const action = validateAction(body?.action);
+
+    console.log(`User ${claimsData.user.id} economic-news request: action=${action}`);
 
     if (!PERPLEXITY_API_KEY) {
       console.error("API key configuration issue");
@@ -134,7 +167,6 @@ serve(async (req) => {
     }
 
     const prompt = getPromptForAction(action);
-    console.log(`Fetching economic events via Perplexity for action: ${action}`);
 
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
@@ -162,11 +194,9 @@ serve(async (req) => {
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content || "[]";
     
-    console.log("Perplexity raw response length:", content.length);
-    
     const data = parsePerplexityResponse(content);
 
-    console.log(`Successfully parsed ${data.length} events for action: ${action}`);
+    console.log(`Parsed ${data.length} events for user ${claimsData.user.id}`);
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

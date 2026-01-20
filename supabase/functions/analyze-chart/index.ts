@@ -1,10 +1,53 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation
+const VALID_ANALYSIS_TYPES = ['intraday', 'swing', 'positional'];
+const VALID_TIMEFRAMES = ['1min', '5min', '15min', '30min', '1H', '4H', '1D', '1W'];
+const MAX_IMAGE_SIZE = 5000000; // ~5MB limit for base64 images
+
+function validateInput(body: any): { valid: boolean; error?: string } {
+  if (!body || typeof body !== 'object') {
+    return { valid: false, error: 'Invalid request body' };
+  }
+
+  const { analysisType, image1Base64, image2Base64, timeframe1, timeframe2 } = body;
+
+  // Validate analysisType
+  if (!analysisType || !VALID_ANALYSIS_TYPES.includes(String(analysisType).toLowerCase())) {
+    return { valid: false, error: 'Invalid analysis type' };
+  }
+
+  // Validate images exist and are within size limits
+  if (!image1Base64 || typeof image1Base64 !== 'string') {
+    return { valid: false, error: 'First image is required' };
+  }
+  if (!image2Base64 || typeof image2Base64 !== 'string') {
+    return { valid: false, error: 'Second image is required' };
+  }
+  if (image1Base64.length > MAX_IMAGE_SIZE) {
+    return { valid: false, error: 'First image exceeds size limit' };
+  }
+  if (image2Base64.length > MAX_IMAGE_SIZE) {
+    return { valid: false, error: 'Second image exceeds size limit' };
+  }
+
+  // Validate timeframes
+  if (!timeframe1 || !VALID_TIMEFRAMES.includes(String(timeframe1))) {
+    return { valid: false, error: 'Invalid first timeframe' };
+  }
+  if (!timeframe2 || !VALID_TIMEFRAMES.includes(String(timeframe2))) {
+    return { valid: false, error: 'Invalid second timeframe' };
+  }
+
+  return { valid: true };
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -13,6 +56,31 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token);
+    
+    if (claimsError || !claimsData?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       console.error('API key configuration issue');
@@ -22,9 +90,23 @@ serve(async (req) => {
       });
     }
 
-    const { analysisType, image1Base64, image2Base64, timeframe1, timeframe2 } = await req.json();
+    const body = await req.json();
+    
+    // Validate input
+    const validation = validateInput(body);
+    if (!validation.valid) {
+      return new Response(JSON.stringify({ error: validation.error }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    console.log(`Starting ${analysisType} analysis for timeframes: ${timeframe1} and ${timeframe2}`);
+    const { analysisType, image1Base64, image2Base64, timeframe1, timeframe2 } = body;
+    const sanitizedAnalysisType = String(analysisType).toLowerCase();
+    const sanitizedTimeframe1 = String(timeframe1);
+    const sanitizedTimeframe2 = String(timeframe2);
+
+    console.log(`User ${claimsData.user.id} starting ${sanitizedAnalysisType} analysis`);
 
     const systemPrompt = `You are an expert technical analyst specializing in Price Action, ICT (Inner Circle Trader) concepts, and SMC (Smart Money Concepts). 
 
@@ -36,7 +118,7 @@ Your analysis MUST include:
 5. **Premium/Discount Zones**: Determine if price is in premium or discount relative to the range
 6. **Key Levels**: Support, resistance, and institutional levels
 
-Based on the ${analysisType} timeframe analysis (${timeframe1} and ${timeframe2} charts):
+Based on the ${sanitizedAnalysisType} timeframe analysis (${sanitizedTimeframe1} and ${sanitizedTimeframe2} charts):
 - For INTRADAY: Focus on quick scalping opportunities, look for 15-50 pip moves
 - For SWING: Focus on multi-day positions, look for 100-300 pip moves  
 - For POSITIONAL: Focus on long-term trends, look for 500+ pip moves
@@ -66,7 +148,7 @@ IMPORTANT: You must provide your response in this EXACT JSON format (no markdown
             content: [
               {
                 type: 'text',
-                text: `Analyze these two chart images for ${analysisType} trading. The first image is the ${timeframe1} timeframe and the second is the ${timeframe2} timeframe. Look at the price action, identify key ICT/SMC concepts, and provide entry, take profit, and stop loss levels based on what you observe in the charts. Return ONLY valid JSON.`
+                text: `Analyze these two chart images for ${sanitizedAnalysisType} trading. The first image is the ${sanitizedTimeframe1} timeframe and the second is the ${sanitizedTimeframe2} timeframe. Look at the price action, identify key ICT/SMC concepts, and provide entry, take profit, and stop loss levels based on what you observe in the charts. Return ONLY valid JSON.`
               },
               {
                 type: 'image_url',
@@ -89,8 +171,7 @@ IMPORTANT: You must provide your response in this EXACT JSON format (no markdown
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI Gateway error:', response.status, errorText);
+      console.error('AI Gateway error:', response.status);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }), {
@@ -106,13 +187,11 @@ IMPORTANT: You must provide your response in this EXACT JSON format (no markdown
         });
       }
       
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw new Error('AI service error');
     }
 
     const data = await response.json();
     const content = data.choices[0].message.content;
-    
-    console.log('Raw AI response:', content.substring(0, 500));
 
     // Parse JSON from response - handle markdown code blocks
     let result;
@@ -137,8 +216,7 @@ IMPORTANT: You must provide your response in this EXACT JSON format (no markdown
         throw new Error('No JSON found in response');
       }
     } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.log('Content that failed to parse:', content);
+      console.error('JSON parse error');
       
       // Return a structured response based on keywords in the content
       result = {
@@ -159,7 +237,7 @@ IMPORTANT: You must provide your response in this EXACT JSON format (no markdown
     if (!result.stopLoss) result.stopLoss = result.entry * 0.99;
     if (!result.analysis) result.analysis = 'Analysis based on chart patterns and ICT/SMC concepts.';
 
-    console.log('Analysis complete:', result.bias, 'confidence:', result.confidence);
+    console.log(`Analysis complete for user ${claimsData.user.id}`);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
