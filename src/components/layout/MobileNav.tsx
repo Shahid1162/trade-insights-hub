@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, Search, BarChart3, Calculator, Newspaper, LineChart, Menu, Sun, Moon, Monitor, LogOut, User } from 'lucide-react';
+import { TrendingUp, BarChart3, Calculator, Newspaper, Menu, Sun, Moon, Monitor, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -23,10 +23,8 @@ interface MobileNavProps {
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: TrendingUp },
-  { id: 'explore', label: 'Explore', icon: Search },
   { id: 'signals', label: 'Signals', icon: BarChart3 },
   { id: 'calculator', label: 'Lot Size', icon: Calculator },
-  { id: 'demo', label: 'Demo Trading', icon: LineChart },
   { id: 'news', label: 'News', icon: Newspaper },
 ];
 
