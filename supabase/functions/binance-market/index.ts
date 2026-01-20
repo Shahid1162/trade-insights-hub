@@ -78,7 +78,8 @@ serve(async (req) => {
         const ticker = await response.json();
         
         if (ticker.code) {
-          throw new Error(ticker.msg || "Failed to fetch ticker");
+          console.error("Binance API error:", ticker.msg);
+          throw new Error("Failed to fetch data");
         }
         
         data = {
@@ -106,7 +107,8 @@ serve(async (req) => {
         const klines = await response.json();
         
         if (klines.code) {
-          throw new Error(klines.msg || "Failed to fetch klines");
+          console.error("Binance API error:", klines.msg);
+          throw new Error("Failed to fetch data");
         }
         
         data = klines.map((k: any[]) => ({
@@ -141,7 +143,7 @@ serve(async (req) => {
       }
 
       default:
-        throw new Error(`Unknown action: ${action}`);
+        throw new Error("Invalid request");
     }
 
     if (data) {
@@ -154,10 +156,9 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Error in binance-market function:", errorMessage);
+    console.error("Function error:", error);
 
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: "An error occurred processing your request" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

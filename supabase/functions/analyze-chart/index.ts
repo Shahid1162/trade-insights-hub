@@ -15,8 +15,11 @@ serve(async (req) => {
   try {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
-      console.error('LOVABLE_API_KEY is not configured');
-      throw new Error('AI API key is not configured');
+      console.error('API key configuration issue');
+      return new Response(JSON.stringify({ error: 'Service temporarily unavailable' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const { analysisType, image1Base64, image2Base64, timeframe1, timeframe2 } = await req.json();
@@ -163,9 +166,9 @@ IMPORTANT: You must provide your response in this EXACT JSON format (no markdown
     });
 
   } catch (error) {
-    console.error('Error in analyze-chart function:', error);
+    console.error('Function error:', error);
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      error: 'An error occurred processing your request' 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
