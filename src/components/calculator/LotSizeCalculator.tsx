@@ -216,14 +216,6 @@ export const LotSizeCalculator: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-4 rounded-lg bg-muted/30 border border-border/30">
-            <p className="text-sm text-muted-foreground text-center">
-              <strong>Formula:</strong> Lot Size = (Account Balance × Risk %) ÷ (Stop Loss Pips × Pip Value)
-            </p>
-            <p className="text-sm text-muted-foreground text-center mt-2">
-              ({parseFloat(accountBalance)} × {parseFloat(riskPercentage)}%) ÷ ({stopLossPips} × ${result.pipValue}) = {result.lotSize} lots
-            </p>
-          </div>
         </div>
       )}
     </div>
