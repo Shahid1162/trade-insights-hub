@@ -53,29 +53,27 @@ serve(async (req) => {
   }
 
   try {
-    // Authentication check
+    // Optional authentication - log user if authenticated, but allow anonymous access
+    let userId = "anonymous";
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token);
     
-    if (claimsError || !claimsData?.user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_ANON_KEY')!,
+          { global: { headers: { Authorization: authHeader } } }
+        );
+
+        const token = authHeader.replace('Bearer ', '');
+        const { data: claimsData } = await supabase.auth.getUser(token);
+        
+        if (claimsData?.user) {
+          userId = claimsData.user.id;
+        }
+      } catch {
+        // Auth failed, continue as anonymous
+      }
     }
 
     const body = await req.json();
@@ -90,7 +88,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`User ${claimsData.user.id} binance request: action=${action}`);
+    console.log(`User ${userId} binance request: action=${action}`);
 
     const cacheKey = `${action}:${symbol}`;
     const cachedData = getFreshCached(cacheKey);
