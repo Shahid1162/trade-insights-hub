@@ -44,6 +44,27 @@ export type Database = {
         }
         Relationships: []
       }
+      signal_usage: {
+        Row: {
+          analysis_type: string
+          id: string
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_type: string
+          id?: string
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_type?: string
+          id?: string
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

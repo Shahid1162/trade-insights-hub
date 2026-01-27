@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BarChart3, Upload, Loader2, Target, TrendingUp, TrendingDown, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, Upload, Loader2, Target, TrendingUp, TrendingDown, Clock, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignalAnalysis } from '@/lib/types';
@@ -14,12 +14,53 @@ const timeframeInfo = {
   positional: { label: 'Positional', timeframes: ['4H', '1D'], description: 'Long-term investment positions' },
 };
 
+const DAILY_LIMIT = 3;
+
 export const SignalGenerator: React.FC = () => {
-  const { isAuthenticated, setShowAuthModal, setAuthMode } = useAuth();
+  const { isAuthenticated, setShowAuthModal, setAuthMode, user } = useAuth();
   const [analysisType, setAnalysisType] = useState<AnalysisType>('intraday');
   const [uploadedImages, setUploadedImages] = useState<{ tf1: File | null; tf2: File | null }>({ tf1: null, tf2: null });
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<SignalAnalysis | null>(null);
+  const [remaining, setRemaining] = useState<number>(DAILY_LIMIT);
+  const [isOwner, setIsOwner] = useState(false);
+  const [checkingUsage, setCheckingUsage] = useState(false);
+
+  // Check usage on mount and when user changes
+  useEffect(() => {
+    const checkUsage = async () => {
+      if (!user) {
+        setRemaining(DAILY_LIMIT);
+        setIsOwner(false);
+        return;
+      }
+
+      setCheckingUsage(true);
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const { count, error } = await supabase
+          .from('signal_usage')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .gte('used_at', today.toISOString());
+
+        if (!error) {
+          setRemaining(Math.max(0, DAILY_LIMIT - (count ?? 0)));
+        }
+
+        // Check if owner
+        setIsOwner(user.email === 'shaikshahid25476@gmail.com');
+      } catch (err) {
+        console.error('Failed to check usage:', err);
+      } finally {
+        setCheckingUsage(false);
+      }
+    };
+
+    checkUsage();
+  }, [user]);
 
   const handleImageUpload = (timeframe: 'tf1' | 'tf2', e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isAuthenticated) {
@@ -63,6 +104,13 @@ export const SignalGenerator: React.FC = () => {
     setLoading(true);
     
     try {
+      // Check limit before proceeding (client-side check for better UX)
+      if (!isOwner && remaining <= 0) {
+        toast.error(`Daily limit reached! You've used all ${DAILY_LIMIT} analyses for today.`);
+        setLoading(false);
+        return;
+      }
+
       // Convert images to base64
       const [image1Base64, image2Base64] = await Promise.all([
         fileToBase64(uploadedImages.tf1),
@@ -71,7 +119,7 @@ export const SignalGenerator: React.FC = () => {
 
       const timeframes = timeframeInfo[analysisType].timeframes;
 
-      // Call the DeepSeek analysis edge function
+      // Call the analysis edge function
       const { data, error } = await supabase.functions.invoke('analyze-chart', {
         body: {
           analysisType,
@@ -88,7 +136,20 @@ export const SignalGenerator: React.FC = () => {
       }
 
       if (data.error) {
+        if (data.limitReached) {
+          setRemaining(0);
+          toast.error(data.message || 'Daily limit reached!');
+          return;
+        }
         throw new Error(data.error);
+      }
+
+      // Update remaining from response
+      if (typeof data.remaining === 'number') {
+        setRemaining(data.remaining);
+      }
+      if (typeof data.isOwner === 'boolean') {
+        setIsOwner(data.isOwner);
       }
 
       const analysisResult: SignalAnalysis = {
@@ -126,6 +187,34 @@ export const SignalGenerator: React.FC = () => {
         <p className="text-muted-foreground text-lg">
           Upload your chart images and let AI analyze for trading signals
         </p>
+        
+        {/* Usage indicator */}
+        {isAuthenticated && !checkingUsage && (
+          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
+            isOwner 
+              ? 'bg-primary/10 text-primary border border-primary/30'
+              : remaining > 0 
+                ? 'bg-muted text-muted-foreground' 
+                : 'bg-destructive/10 text-destructive border border-destructive/30'
+          }`}>
+            {isOwner ? (
+              <>
+                <BarChart3 className="w-4 h-4" />
+                Unlimited Access
+              </>
+            ) : remaining > 0 ? (
+              <>
+                <Clock className="w-4 h-4" />
+                {remaining} of {DAILY_LIMIT} analyses remaining today
+              </>
+            ) : (
+              <>
+                <AlertCircle className="w-4 h-4" />
+                Daily limit reached - resets at midnight
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Analysis Type Selection */}
@@ -200,17 +289,22 @@ export const SignalGenerator: React.FC = () => {
             variant="gradient"
             size="xl"
             onClick={handleAnalyze}
-            disabled={loading || !uploadedImages.tf1 || !uploadedImages.tf2}
+            disabled={loading || !uploadedImages.tf1 || !uploadedImages.tf2 || (!isOwner && remaining <= 0)}
           >
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
                 Analyzing Charts...
               </>
+            ) : !isOwner && remaining <= 0 ? (
+              <>
+                <AlertCircle className="w-5 h-5" />
+                Limit Reached
+              </>
             ) : (
               <>
                 <BarChart3 className="w-5 h-5" />
-                Generate Signal
+                Generate Signal {!isOwner && `(${remaining} left)`}
               </>
             )}
           </Button>
