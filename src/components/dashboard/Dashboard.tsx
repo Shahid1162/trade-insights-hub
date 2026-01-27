@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bitcoin, RefreshCw } from 'lucide-react';
 import { MarketSection } from './MarketSection';
-import { CryptoChartModal } from './CryptoChartModal';
 import { Stock } from '@/lib/types';
 import { getCryptoPrices, CryptoTicker } from '@/lib/binanceApi';
 
@@ -10,9 +9,6 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const initialFetchDone = useRef(false);
-  
-  // Chart modal state
-  const [selectedCrypto, setSelectedCrypto] = useState<{ symbol: string; name: string } | null>(null);
 
   const fetchMarketData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -40,10 +36,6 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Handle crypto click to show chart
-  const handleCryptoClick = (symbol: string, name: string) => {
-    setSelectedCrypto({ symbol, name });
-  };
 
   // Auto-fetch on mount and every 5 seconds for live updates
   useEffect(() => {
@@ -64,7 +56,7 @@ export const Dashboard: React.FC = () => {
           <span className="gradient-text">TA5</span> Live Crypto
         </h1>
         <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-          Real-time cryptocurrency prices from Binance. Click any crypto to view live candlestick charts.
+          Real-time cryptocurrency prices from Binance
         </p>
       </div>
 
@@ -98,8 +90,7 @@ export const Dashboard: React.FC = () => {
             {[...cryptoAssets, ...cryptoAssets].map((stock, i) => (
               <div 
                 key={`${stock.symbol}-${i}`} 
-                className="flex items-center gap-3 whitespace-nowrap cursor-pointer hover:text-primary transition-colors"
-                onClick={() => handleCryptoClick(stock.symbol, stock.name)}
+                className="flex items-center gap-3 whitespace-nowrap"
               >
                 <span className="font-semibold">{stock.symbol}</span>
                 <span className="font-mono">${stock.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
@@ -119,20 +110,10 @@ export const Dashboard: React.FC = () => {
             title="Cryptocurrency"
             icon={<Bitcoin className="w-5 h-5" />}
             stocks={cryptoAssets}
-            onStockClick={handleCryptoClick}
           />
         </div>
       )}
 
-      {/* Chart Modal - Full Screen */}
-      {selectedCrypto && (
-        <CryptoChartModal
-          open={!!selectedCrypto}
-          onClose={() => setSelectedCrypto(null)}
-          symbol={selectedCrypto.symbol}
-          name={selectedCrypto.name}
-        />
-      )}
     </div>
   );
 };
