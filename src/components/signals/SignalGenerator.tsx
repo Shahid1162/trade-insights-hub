@@ -124,7 +124,7 @@ export const SignalGenerator: React.FC = () => {
           <span className="gradient-text">AI Signal</span> Generator
         </h1>
         <p className="text-muted-foreground text-lg">
-          Upload your chart images and let AI analyze using Price Action, ICT & SMC concepts
+          Upload your chart images and let AI analyze for trading signals
         </p>
       </div>
 

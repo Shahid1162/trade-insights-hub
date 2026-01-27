@@ -127,7 +127,7 @@ export const NewsCalendar: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-bullish animate-pulse' : 'bg-amber-500'}`}></div>
           <span className="text-sm text-muted-foreground">
-            {isLive ? 'Live Economic Data' : 'Cached Data'}
+            {isLive ? 'Live Economic Data' : 'Economic Data'}
           </span>
         </div>
         <Button variant="secondary" size="sm" onClick={() => fetchEconomicNews(categoryFilter)} disabled={loading}>
