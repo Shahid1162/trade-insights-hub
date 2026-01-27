@@ -199,7 +199,7 @@ export const NewsCalendar: React.FC = () => {
                 {selectedDate ? format(selectedDate, 'PPP') : 'Select date'}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent className="w-auto p-0 z-[100] bg-popover" align="start">
               <Calendar
                 mode="single"
                 selected={selectedDate}
