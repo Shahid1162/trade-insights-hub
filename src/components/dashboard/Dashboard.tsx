@@ -76,9 +76,9 @@ export const Dashboard: React.FC = () => {
       {/* Loading State */}
       {loading && cryptoAssets.length === 0 && (
         <div className="flex items-center justify-center py-12">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
             <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-            <span className="text-muted-foreground">Loading live prices from Binance...</span>
+            <span className="text-muted-foreground">Loading...</span>
           </div>
         </div>
       )}

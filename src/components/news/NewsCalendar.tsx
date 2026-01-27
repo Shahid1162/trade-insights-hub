@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Globe, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Calendar as CalendarIcon, Globe, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EconomicEvent } from '@/lib/types';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 // Fallback mock events when API fails
 const fallbackEvents: EconomicEvent[] = [
@@ -34,16 +39,56 @@ const impactColors = {
 
 type EventCategory = 'all' | 'upcoming' | 'ongoing' | 'previous';
 
+const timezones = [
+  { value: 'Asia/Kolkata', label: 'India (IST)', offset: '+5:30' },
+  { value: 'UTC', label: 'UTC', offset: '+0:00' },
+  { value: 'America/New_York', label: 'New York (EST)', offset: '-5:00' },
+  { value: 'America/Los_Angeles', label: 'Los Angeles (PST)', offset: '-8:00' },
+  { value: 'Europe/London', label: 'London (GMT)', offset: '+0:00' },
+  { value: 'Europe/Paris', label: 'Paris (CET)', offset: '+1:00' },
+  { value: 'Asia/Tokyo', label: 'Tokyo (JST)', offset: '+9:00' },
+  { value: 'Asia/Singapore', label: 'Singapore (SGT)', offset: '+8:00' },
+  { value: 'Asia/Dubai', label: 'Dubai (GST)', offset: '+4:00' },
+  { value: 'Australia/Sydney', label: 'Sydney (AEDT)', offset: '+11:00' },
+];
+
 export const NewsCalendar: React.FC = () => {
   const [events, setEvents] = useState<EconomicEvent[]>(fallbackEvents);
   const [impactFilter, setImpactFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [categoryFilter, setCategoryFilter] = useState<EventCategory>('all');
   const [loading, setLoading] = useState(false);
   const [isLive, setIsLive] = useState(false);
+  const [selectedTimezone, setSelectedTimezone] = useState('Asia/Kolkata');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
-  const filteredEvents = events.filter(
-    (event) => impactFilter === 'all' || event.impact === impactFilter
-  );
+  const filteredEvents = events.filter((event) => {
+    const matchesImpact = impactFilter === 'all' || event.impact === impactFilter;
+    const matchesDate = !selectedDate || event.date === format(selectedDate, 'yyyy-MM-dd');
+    return matchesImpact && matchesDate;
+  });
+
+  // Convert time to selected timezone
+  const convertToTimezone = (time: string, date: string) => {
+    try {
+      const [hours, minutes] = time.split(':').map(Number);
+      const eventDate = new Date(date);
+      eventDate.setUTCHours(hours, minutes, 0, 0);
+      
+      return eventDate.toLocaleTimeString('en-US', {
+        timeZone: selectedTimezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    } catch {
+      return time;
+    }
+  };
+
+  const getTimezoneAbbr = () => {
+    const tz = timezones.find(t => t.value === selectedTimezone);
+    return tz ? tz.label.match(/\(([^)]+)\)/)?.[1] || '' : '';
+  };
 
   // Group events by date
   const groupedEvents = filteredEvents.reduce((acc, event) => {
@@ -123,17 +168,59 @@ export const NewsCalendar: React.FC = () => {
       </div>
 
       {/* Status Bar */}
-      <div className="flex items-center justify-between p-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-bullish animate-pulse' : 'bg-amber-500'}`}></div>
           <span className="text-sm text-muted-foreground">
             {isLive ? 'Live Economic Data' : 'Economic Data'}
           </span>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => fetchEconomicNews(categoryFilter)} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          {/* Timezone Selector */}
+          <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
+            <SelectTrigger className="w-[180px]">
+              <Globe className="w-4 h-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {timezones.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>
+                  {tz.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Date Picker */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className={cn("justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}>
+                <CalendarIcon className="w-4 h-4 mr-2" />
+                {selectedDate ? format(selectedDate, 'PPP') : 'Select date'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+
+          {selectedDate && (
+            <Button variant="ghost" size="sm" onClick={() => setSelectedDate(undefined)}>
+              Clear
+            </Button>
+          )}
+
+          <Button variant="secondary" size="sm" onClick={() => fetchEconomicNews(categoryFilter)} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Category Filters */}
@@ -209,7 +296,9 @@ export const NewsCalendar: React.FC = () => {
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${impactColors[event.impact]}`}>
                             {event.impact.toUpperCase()}
                           </span>
-                          <span className="text-sm font-mono text-muted-foreground">{event.time} GMT</span>
+                          <span className="text-sm font-mono text-muted-foreground">
+                            {convertToTimezone(event.time, event.date)} {getTimezoneAbbr()}
+                          </span>
                         </div>
                         <h3 className="font-semibold">{event.title}</h3>
                       </div>
