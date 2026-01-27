@@ -53,11 +53,8 @@ export const Dashboard: React.FC = () => {
       {/* Header */}
       <div className="text-center space-y-3 animate-fade-in">
         <h1 className="text-4xl md:text-5xl font-bold">
-          <span className="gradient-text">TA5</span> Live Crypto
+          <span className="gradient-text">TA5</span> AI-Powered Trading Signals
         </h1>
-        <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-          Real-time cryptocurrency prices from Binance
-        </p>
       </div>
 
       {/* Status Bar */}
