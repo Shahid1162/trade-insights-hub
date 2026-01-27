@@ -11,6 +11,8 @@ const corsHeaders = {
 const VALID_ANALYSIS_TYPES = ['intraday', 'swing', 'positional'];
 const VALID_TIMEFRAMES = ['1min', '5min', '15min', '30min', '1H', '4H', '1D', '1W'];
 const MAX_IMAGE_SIZE = 5000000; // ~5MB limit for base64 images
+const DAILY_LIMIT = 3;
+const OWNER_EMAIL = 'shaikshahid25476@gmail.com';
 
 function validateInput(body: any): { valid: boolean; error?: string } {
   if (!body || typeof body !== 'object') {
@@ -79,6 +81,42 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    const userEmail = claimsData.user.email;
+    const userId = claimsData.user.id;
+    const isOwner = userEmail === OWNER_EMAIL;
+
+    // Check daily usage limit (skip for owner)
+    if (!isOwner) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { count, error: countError } = await supabase
+        .from('signal_usage')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('used_at', today.toISOString());
+
+      if (countError) {
+        console.error('Usage check error:', countError);
+        return new Response(JSON.stringify({ error: 'Failed to check usage' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if ((count ?? 0) >= DAILY_LIMIT) {
+        return new Response(JSON.stringify({ 
+          error: 'Daily limit reached',
+          message: `You have used all ${DAILY_LIMIT} analyses for today. Come back tomorrow!`,
+          limitReached: true,
+          remaining: 0
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -237,9 +275,33 @@ IMPORTANT: You must provide your response in this EXACT JSON format (no markdown
     if (!result.stopLoss) result.stopLoss = result.entry * 0.99;
     if (!result.analysis) result.analysis = 'Analysis based on chart patterns and ICT/SMC concepts.';
 
-    console.log(`Analysis complete for user ${claimsData.user.id}`);
+    // Record usage (skip for owner)
+    if (!isOwner) {
+      const { error: insertError } = await supabase
+        .from('signal_usage')
+        .insert({ user_id: userId, analysis_type: sanitizedAnalysisType });
+      
+      if (insertError) {
+        console.error('Failed to record usage:', insertError);
+      }
+    }
 
-    return new Response(JSON.stringify(result), {
+    // Get remaining count for response
+    let remaining = isOwner ? 999 : DAILY_LIMIT;
+    if (!isOwner) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { count } = await supabase
+        .from('signal_usage')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('used_at', today.toISOString());
+      remaining = Math.max(0, DAILY_LIMIT - (count ?? 0));
+    }
+
+    console.log(`Analysis complete for user ${userId}`);
+
+    return new Response(JSON.stringify({ ...result, remaining, isOwner }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
