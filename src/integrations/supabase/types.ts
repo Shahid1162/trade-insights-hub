@@ -20,6 +20,7 @@ export type Database = {
           email: string | null
           id: string
           name: string | null
+          preferred_timezone: string | null
           updated_at: string
           user_id: string
         }
@@ -28,6 +29,7 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+          preferred_timezone?: string | null
           updated_at?: string
           user_id: string
         }
@@ -36,6 +38,7 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+          preferred_timezone?: string | null
           updated_at?: string
           user_id?: string
         }
