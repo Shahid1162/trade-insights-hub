@@ -37,10 +37,10 @@
 
     --radius: 0.75rem;
 
-    /* Custom trading colors */
-    --bullish: 142 76% 36%;
+    /* Custom trading colors - darkened for WCAG AA 4.5:1 contrast */
+    --bullish: 142 76% 28%;
     --bullish-foreground: 0 0% 100%;
-    --bearish: 0 84% 60%;
+    --bearish: 0 84% 45%;
     --bearish-foreground: 0 0% 100%;
     
     /* Gradients */
