@@ -48,9 +48,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
         onClick={() => onSectionChange('dashboard')}
       >
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-400 flex items-center justify-center shadow-lg">
-          <span className="text-primary-foreground font-bold text-lg">T5</span>
+          <span className="text-primary-foreground font-bold text-sm">TA5</span>
         </div>
-        <span className="text-xl font-bold gradient-text">TA5</span>
+        <span className="text-xl font-bold gradient-text">TA5pro</span>
       </div>
 
       {/* Navigation */}
