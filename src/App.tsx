@@ -3,18 +3,27 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { Dashboard } from "@/components/dashboard/Dashboard";
-import { SignalGenerator } from "@/components/signals/SignalGenerator";
-import { LotSizeCalculator } from "@/components/calculator/LotSizeCalculator";
-import { NewsCalendar } from "@/components/news/NewsCalendar";
+
+// Lazy load non-critical sections to reduce initial bundle size
+const SignalGenerator = lazy(() => import("@/components/signals/SignalGenerator").then(m => ({ default: m.SignalGenerator })));
+const LotSizeCalculator = lazy(() => import("@/components/calculator/LotSizeCalculator").then(m => ({ default: m.LotSizeCalculator })));
+const NewsCalendar = lazy(() => import("@/components/news/NewsCalendar").then(m => ({ default: m.NewsCalendar })));
 
 const queryClient = new QueryClient();
+
+// Loading fallback component
+const SectionLoader = () => (
+  <div className="flex items-center justify-center min-h-[400px]">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+  </div>
+);
 
 const MainApp = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -22,9 +31,9 @@ const MainApp = () => {
   const renderSection = () => {
     switch (activeSection) {
       case 'dashboard': return <Dashboard />;
-      case 'signals': return <SignalGenerator />;
-      case 'calculator': return <LotSizeCalculator />;
-      case 'news': return <NewsCalendar />;
+      case 'signals': return <Suspense fallback={<SectionLoader />}><SignalGenerator /></Suspense>;
+      case 'calculator': return <Suspense fallback={<SectionLoader />}><LotSizeCalculator /></Suspense>;
+      case 'news': return <Suspense fallback={<SectionLoader />}><NewsCalendar /></Suspense>;
       default: return <Dashboard />;
     }
   };
