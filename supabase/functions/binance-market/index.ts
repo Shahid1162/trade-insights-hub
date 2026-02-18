@@ -53,28 +53,31 @@ serve(async (req) => {
   }
 
   try {
-    // Optional authentication - log user if authenticated, but allow anonymous access
-    let userId = "anonymous";
+    // Authentication required
     const authHeader = req.headers.get('Authorization');
-    
-    if (authHeader?.startsWith('Bearer ')) {
-      try {
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL')!,
-          Deno.env.get('SUPABASE_ANON_KEY')!,
-          { global: { headers: { Authorization: authHeader } } }
-        );
-
-        const token = authHeader.replace('Bearer ', '');
-        const { data: claimsData } = await supabase.auth.getUser(token);
-        
-        if (claimsData?.user) {
-          userId = claimsData.user.id;
-        }
-      } catch {
-        // Auth failed, continue as anonymous
-      }
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(token);
+    if (authError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userId = claimsData.claims.sub;
 
     const body = await req.json();
     const action = body?.action;
