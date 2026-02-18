@@ -319,7 +319,7 @@ export const SignalGenerator: React.FC = () => {
             <div>
               <p className="text-lg font-semibold">Analyzing Charts...</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Running ICT/SMC & Price Action analysis
+                Estimated time: 15-30 seconds
               </p>
             </div>
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-sm font-mono">
@@ -327,7 +327,7 @@ export const SignalGenerator: React.FC = () => {
               <span>{Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, '0')}</span>
               <span className="text-muted-foreground">elapsed</span>
             </div>
-            <p className="text-xs text-muted-foreground">Typically takes 15-30 seconds</p>
+            <p className="text-xs text-muted-foreground">Please wait while we process your charts</p>
           </div>
         </div>
       )}
