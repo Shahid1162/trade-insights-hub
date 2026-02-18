@@ -156,6 +156,8 @@ export const SignalGenerator: React.FC = () => {
         type: analysisType,
         entry: data.entry,
         takeProfit: data.takeProfit,
+        takeProfit2: data.takeProfit2,
+        takeProfit3: data.takeProfit3,
         stopLoss: data.stopLoss,
         bias: data.bias,
         confidence: data.confidence,
@@ -404,15 +406,25 @@ export const SignalGenerator: React.FC = () => {
           </div>
 
 
+          {/* Key Points Analysis */}
           <div className="p-6 rounded-xl bg-card border border-border/50">
             <h4 className="font-semibold mb-4 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-primary" />
-              Detailed Analysis
+              Key Analysis Points
             </h4>
-            <div className="prose prose-invert prose-sm max-w-none">
-              <pre className="whitespace-pre-wrap text-sm text-muted-foreground bg-transparent p-0 font-sans">
-                {analysis.analysis}
-              </pre>
+            <div className="space-y-2">
+              {analysis.analysis.split(/\n+|(?:\d+\.\s)/).filter(line => line.trim().length > 5).map((point, i) => {
+                const cleaned = point.replace(/^[-•*#]+\s*/, '').replace(/\*\*/g, '').trim();
+                if (!cleaned || cleaned.length < 5) return null;
+                return (
+                  <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-muted/30">
+                    <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${
+                      analysis.bias === 'bullish' ? 'bg-bullish' : 'bg-bearish'
+                    }`} />
+                    <p className="text-sm text-muted-foreground leading-relaxed">{cleaned}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
