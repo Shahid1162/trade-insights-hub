@@ -116,31 +116,6 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Features Section */}
-      <div className="space-y-4 animate-fade-in">
-        <h2 className="text-xl font-semibold text-center">
-          Everything you need for <span className="text-primary">smarter trading</span>
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {features.map((feature, index) => (
-            <div
-              key={feature.title}
-              className={`p-5 rounded-xl bg-gradient-to-br ${feature.color} border ${feature.borderColor} hover:scale-[1.02] transition-all duration-300`}
-              style={{ animationDelay: `${index * 80}ms` }}
-            >
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-background/50 text-foreground shrink-0">
-                  {feature.icon}
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-1">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Loading State */}
       {loading && cryptoAssets.length === 0 && (
         <div className="flex items-center justify-center py-12">
@@ -181,6 +156,32 @@ export const Dashboard: React.FC = () => {
           />
         </div>
       )}
+
+      {/* Features Section */}
+      <div className="space-y-4 animate-fade-in">
+        <h2 className="text-xl font-semibold text-center">
+          Everything you need for <span className="text-primary">smarter trading</span>
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {features.map((feature, index) => (
+            <div
+              key={feature.title}
+              className={`p-5 rounded-xl bg-gradient-to-br ${feature.color} border ${feature.borderColor} hover:scale-[1.02] transition-all duration-300`}
+              style={{ animationDelay: `${index * 80}ms` }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-background/50 text-foreground shrink-0">
+                  {feature.icon}
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
     </div>
   );
