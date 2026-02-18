@@ -362,7 +362,7 @@ Return ONLY this JSON (no markdown, no code blocks, no explanation outside JSON)
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-pro',
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -408,7 +408,7 @@ Think through your analysis step by step internally before producing the final J
             ]
           }
         ],
-        max_tokens: 8000,
+        max_tokens: 4000,
         temperature: 0.05,
       }),
     });
