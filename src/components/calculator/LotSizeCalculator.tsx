@@ -46,6 +46,7 @@ export const LotSizeCalculator: React.FC = () => {
   const [stopLossPips, setStopLossPips] = useState<string>('50');
   const [result, setResult] = useState<LotSizeResult | null>(null);
   const [pairSearch, setPairSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const allPairs = useMemo(() => Object.keys(pipValues), []);
   const filteredPairs = useMemo(() => {
@@ -53,6 +54,12 @@ export const LotSizeCalculator: React.FC = () => {
     const q = pairSearch.toUpperCase();
     return allPairs.filter(p => p.includes(q));
   }, [allPairs, pairSearch]);
+
+  const handleSelectPair = (p: string) => {
+    setPair(p);
+    setPairSearch('');
+    setShowDropdown(false);
+  };
 
   const calculateLotSize = () => {
     if (!isAuthenticated) {
@@ -101,27 +108,44 @@ export const LotSizeCalculator: React.FC = () => {
             <Target className="w-4 h-4 text-primary" />
             Trading Pair
           </label>
-          <div className="relative mb-2">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               value={pairSearch}
-              onChange={(e) => setPairSearch(e.target.value)}
+              onChange={(e) => {
+                setPairSearch(e.target.value);
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
               className="w-full trading-input pl-9"
-              placeholder="Search pairs..."
+              placeholder={`Selected: ${pair} — Type to search...`}
             />
+            {showDropdown && filteredPairs.length > 0 && (
+              <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg">
+                {filteredPairs.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handleSelectPair(p)}
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors flex justify-between items-center ${p === pair ? 'bg-accent/50 font-medium' : ''}`}
+                  >
+                    <span>{p}</span>
+                    <span className="text-xs text-muted-foreground">Pip: ${pipValues[p]}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {showDropdown && pairSearch && filteredPairs.length === 0 && (
+              <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg p-3 text-sm text-muted-foreground text-center">
+                No pairs found
+              </div>
+            )}
           </div>
-          <select
-            value={pair}
-            onChange={(e) => setPair(e.target.value)}
-            className="w-full trading-input"
-          >
-            {filteredPairs.map((p) => (
-              <option key={p} value={p}>
-                {p} (Pip Value: ${pipValues[p]})
-              </option>
-            ))}
-          </select>
+          {/* Click outside to close */}
+          {showDropdown && (
+            <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
+          )}
         </div>
 
         {/* Account Currency */}
