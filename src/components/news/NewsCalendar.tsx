@@ -30,7 +30,7 @@ const impactColors = {
   low: 'bg-muted text-muted-foreground border-border',
 };
 
-type EventCategory = 'all' | 'upcoming' | 'ongoing' | 'previous';
+type EventCategory = 'all' | 'upcoming';
 
 const timezones = [
   { value: 'Asia/Kolkata', label: 'India (IST)', offset: '+5:30' },
@@ -332,7 +332,7 @@ export const NewsCalendar: React.FC = () => {
       <div className="flex flex-wrap items-center gap-4 animate-fade-in">
         <span className="text-sm text-muted-foreground">Category:</span>
         <div className="flex gap-2">
-          {(['all', 'upcoming', 'ongoing', 'previous'] as EventCategory[]).map((category) => (
+          {(['all', 'upcoming'] as EventCategory[]).map((category) => (
             <Button key={category} variant={categoryFilter === category ? 'gradient' : 'outline'} size="sm" onClick={() => setCategoryFilter(category)}>
               {category.charAt(0).toUpperCase() + category.slice(1)}
             </Button>

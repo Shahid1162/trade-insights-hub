@@ -9,7 +9,7 @@ const corsHeaders = {
 
 const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
 
-const VALID_ACTIONS = ["upcoming", "ongoing", "previous", "all"] as const;
+const VALID_ACTIONS = ["upcoming", "all"] as const;
 type Action = typeof VALID_ACTIONS[number];
 
 interface EconomicEvent {
@@ -42,70 +42,25 @@ function getDateOffset(days: number): string {
 function getPromptForAction(action: Action): string {
   const today = getToday();
   
-  const basePrompt = `You are an economic calendar data provider. Search the web for REAL economic calendar data for the week of ${today}.
+  const basePrompt = `Search the web for the REAL economic calendar. Use ForexFactory.com or Investing.com.
 
-Use reliable sources: ForexFactory.com, Investing.com, TradingEconomics.com, DailyFX.com.
+Return ONLY a JSON array. No markdown, no code blocks, no text. Start with [ end with ].
 
-CRITICAL RULES:
-1. Return ONLY real, verified economic events. Do NOT fabricate events.
-2. Return ONLY a valid JSON array starting with [ and ending with ].
-3. No markdown, no code blocks, no explanations - ONLY the JSON array.
-4. Each object MUST have these exact fields:
-   - id: unique string
-   - title: official event name (e.g. "US Non-Farm Payrolls", "ECB Interest Rate Decision")
-   - country: 3-letter currency code (USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD, CNY)
-   - date: YYYY-MM-DD format
-   - time: HH:MM format (24-hour UTC)
-   - impact: "high", "medium", or "low"
-   - forecast: consensus forecast as string (e.g. "2.5%", "250K") or null
-   - previous: previous value as string or null
-   - actual: released value as string, or null if not yet released
+Each object: { "id": "string", "title": "event name", "country": "USD/EUR/GBP/JPY/AUD/CAD/CHF/NZD/CNY", "date": "YYYY-MM-DD", "time": "HH:MM" (UTC 24h), "impact": "high/medium/low", "forecast": "value or null", "previous": "value or null", "actual": "value or null" }
 
-IMPORTANT: Today's date is ${today}.`;
+Today is ${today}.`;
 
   switch (action) {
     case "upcoming":
-      return `${basePrompt}
-
-Find 15-20 REAL upcoming high and medium impact economic events scheduled between ${getDateOffset(1)} and ${getDateOffset(7)}.
-Focus on major economies: US, EU, UK, Japan, Australia, Canada.
-ALL events must have dates AFTER ${today}.
-ALL actual values MUST be null (these events haven't happened yet).`;
-
-    case "ongoing":
-      return `${basePrompt}
-
-Find ALL economic events scheduled for TODAY ${today} ONLY.
-CRITICAL: The date field for EVERY event MUST be exactly "${today}".
-For events that have ALREADY been released today, you MUST include their actual released values - search ForexFactory.com and Investing.com for the latest released data.
-Do NOT leave actual as null if the data has already been published today.
-Include both released and upcoming events for today.`;
-
-    case "previous":
-      return `${basePrompt}
-
-Find 15-20 REAL high and medium impact economic events that were ALREADY RELEASED between ${getDateOffset(-7)} and ${getDateOffset(-1)}.
-CRITICAL: ALL events must have dates BEFORE ${today} (between ${getDateOffset(-7)} and ${getDateOffset(-1)}).
-CRITICAL: You MUST include the actual released values for ALL events. Every single event MUST have an actual value because they have already occurred.
-Search ForexFactory.com and Investing.com to find the actual released values.
-Do NOT return any event without an actual value.`;
-
+      return `${basePrompt}\n\nFind 15-20 upcoming high/medium impact events from ${getDateOffset(1)} to ${getDateOffset(7)}. Major economies only. All actual=null.`;
     case "all":
     default:
-      return `${basePrompt}
-
-Find 25-30 REAL economic events covering:
-- Past 3 days (${getDateOffset(-3)} to ${getDateOffset(-1)}): MUST include actual released values for all
-- Today (${today}): include actual if already released, null if pending
-- Next 5 days (${getDateOffset(1)} to ${getDateOffset(5)}): actual must be null
-Focus on high and medium impact events from major economies.
-Past events MUST have actual values filled in.`;
+      return `${basePrompt}\n\nFind 20-25 events: past 3 days (${getDateOffset(-3)} to ${getDateOffset(-1)}) with actual values, today (${today}) with actual if released, next 5 days (${getDateOffset(1)} to ${getDateOffset(5)}) actual=null. High/medium impact, major economies.`;
   }
 }
 
-function parsePerplexityResponse(content: string, action: Action): EconomicEvent[] {
+function parseResponse(content: string, action: Action): EconomicEvent[] {
   let cleaned = content.trim();
-  
   if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
   else if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
   if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
@@ -116,58 +71,35 @@ function parsePerplexityResponse(content: string, action: Action): EconomicEvent
 
   try {
     const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed)) {
-      console.error("Parsed response is not an array, got:", typeof parsed);
-      return [];
-    }
+    if (!Array.isArray(parsed)) return [];
 
     const today = getToday();
 
-    function sanitizeValue(val: any): string | undefined {
-      if (val == null || val === "null" || val === "" || val === "N/A" || val === "n/a") return undefined;
-      const s = String(val).trim();
-      if (s.length <= 30) return s;
-      return undefined;
-    }
-    
-    let events = parsed.map((ev: any, index: number) => {
-      const eventDate = String(ev.date || today);
-      const isFuture = eventDate > today;
-      
+    return parsed.map((ev: any, i: number) => {
+      const date = String(ev.date || today);
+      const isFuture = date > today;
+      const val = (v: any) => {
+        if (v == null || v === "null" || v === "" || v === "N/A") return undefined;
+        const s = String(v).trim();
+        return s.length <= 30 ? s : undefined;
+      };
       return {
-        id: String(ev.id || `event-${index}`),
+        id: String(ev.id || `ev-${i}`),
         title: String(ev.title || "Unknown Event").slice(0, 200),
         country: String(ev.country || "USD").toUpperCase().slice(0, 3),
-        date: eventDate,
+        date,
         time: String(ev.time || "00:00").slice(0, 5),
         impact: ["high", "medium", "low"].includes(ev.impact) ? ev.impact : "medium",
-        forecast: sanitizeValue(ev.forecast),
-        previous: sanitizeValue(ev.previous),
-        actual: isFuture ? undefined : sanitizeValue(ev.actual),
+        forecast: val(ev.forecast),
+        previous: val(ev.previous),
+        actual: isFuture ? undefined : val(ev.actual),
       };
+    }).filter((e: EconomicEvent) => {
+      if (action === "upcoming") return e.date > today;
+      return true;
     });
-
-    // Post-processing: enforce date constraints based on action
-    switch (action) {
-      case "ongoing":
-        // Only keep today's events
-        events = events.map(e => ({ ...e, date: today }));
-        break;
-      case "upcoming":
-        // Only keep future events
-        events = events.filter(e => e.date > today);
-        // Ensure no actual values for future events
-        events = events.map(e => ({ ...e, actual: undefined }));
-        break;
-      case "previous":
-        // Only keep past events
-        events = events.filter(e => e.date < today);
-        break;
-    }
-
-    return events;
-  } catch (e) {
-    console.error("Failed to parse response, first 500 chars:", cleaned.slice(0, 500));
+  } catch {
+    console.error("Parse failed:", cleaned.slice(0, 300));
     return [];
   }
 }
@@ -181,8 +113,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -195,29 +126,20 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     const body = await req.json().catch(() => ({}));
     const action = validateAction(body?.action);
 
-    console.log(`User ${user.id} economic-news request: action=${action}, today=${getToday()}`);
+    console.log(`User ${user.id} economic-news: action=${action}`);
 
     if (!PERPLEXITY_API_KEY) {
-      console.error("PERPLEXITY_API_KEY not configured");
-      return new Response(JSON.stringify({ data: [], error: "Service temporarily unavailable" }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ data: [], error: "Service unavailable" }), {
+        status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const prompt = getPromptForAction(action);
-
-    // Use sonar-pro for ongoing (needs actual values), sonar for others (more reliable JSON)
-    const model = (action === "ongoing" || action === "previous") ? "sonar-pro" : "sonar";
-    const recency = (action === "previous" || action === "all") ? "week" : "day";
 
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
@@ -226,46 +148,35 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model,
+        model: "sonar",
         messages: [
-          { role: "system", content: "You are an economic calendar data provider. You MUST search the web for REAL economic calendar data from ForexFactory.com, Investing.com, or TradingEconomics.com. Return ONLY a valid JSON array. No markdown code blocks, no explanations, no extra text. Start with [ and end with ]. Never fabricate events. Always include actual released values for past events." },
-          { role: "user", content: prompt }
+          { role: "system", content: "Return ONLY valid JSON arrays of economic events. No extra text." },
+          { role: "user", content: getPromptForAction(action) }
         ],
         temperature: 0.0,
-        search_recency_filter: recency,
+        search_recency_filter: "week",
       }),
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("Perplexity API error:", response.status, errorBody);
-      return new Response(JSON.stringify({ data: [], error: "Service temporarily unavailable" }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      console.error("Perplexity error:", response.status);
+      return new Response(JSON.stringify({ data: [], error: "Service unavailable" }), {
+        status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content || "[]";
-    
-    console.log("Raw response length:", content.length);
-    console.log("Raw response preview:", content.slice(0, 300));
-    
-    const data = parsePerplexityResponse(content, action);
-    console.log(`Parsed ${data.length} events for action=${action}`);
-    
-    // Log sample of actual values for debugging
-    const withActual = data.filter(e => e.actual);
-    console.log(`Events with actual values: ${withActual.length}/${data.length}`);
+    const data = parseResponse(content, action);
+    console.log(`Parsed ${data.length} events`);
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: unknown) {
-    console.error("Function error:", error);
-    return new Response(JSON.stringify({ data: [], error: "An error occurred processing your request" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+  } catch (error) {
+    console.error("Error:", error);
+    return new Response(JSON.stringify({ data: [], error: "Request failed" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
