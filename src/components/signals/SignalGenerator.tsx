@@ -155,6 +155,7 @@ export const SignalGenerator: React.FC = () => {
 
       const analysisResult: SignalAnalysis = {
         type: analysisType,
+        instrument: data.instrument || undefined,
         entry: data.entry,
         takeProfit: data.takeProfit,
         takeProfit2: data.takeProfit2,
@@ -334,7 +335,10 @@ export const SignalGenerator: React.FC = () => {
                   <TrendingDown className="w-8 h-8 text-bearish" />
                 )}
                 <div>
-                  <h3 className="text-2xl font-bold capitalize">{analysis.bias} Bias</h3>
+                  <h3 className="text-2xl font-bold capitalize">
+                    {analysis.instrument && <span className="text-foreground">{analysis.instrument} — </span>}
+                    {analysis.bias} Bias
+                  </h3>
                   <p className="text-muted-foreground">{timeframeInfo[analysis.type].label} Analysis</p>
                 </div>
               </div>

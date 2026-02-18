@@ -229,6 +229,7 @@ sanitizedAnalysisType === 'swing' ?
 
 Return ONLY this JSON (no markdown, no code blocks):
 {
+  "instrument": "detected pair/symbol name from chart (e.g. EURUSD, XAUUSD, BTCUSD, NIFTY50, AAPL etc.)",
   "bias": "bullish" or "bearish",
   "confidence": number 60-95,
   "entry": exact price from chart,
