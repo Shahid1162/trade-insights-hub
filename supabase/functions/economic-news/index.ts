@@ -33,66 +33,42 @@ function validateAction(action: any): Action {
 function getPromptForAction(action: Action): string {
   const today = new Date().toISOString().split('T')[0];
   
-  const basePrompt = `You are an economic calendar data provider. Return ONLY a valid JSON array of economic events with no markdown formatting, no code blocks, and no explanations.
+  const basePrompt = `You are an economic calendar assistant. Your job is to provide realistic economic calendar events based on your knowledge of regularly scheduled economic releases.
 
-Each event must have these exact fields:
-- id: unique string identifier
-- title: event name (e.g., "US Non-Farm Payrolls", "ECB Interest Rate Decision")
+Return ONLY a valid JSON array. No markdown, no code blocks, no explanations, no disclaimers.
+
+Each object in the array must have:
+- id: unique string
+- title: event name (e.g. "US Non-Farm Payrolls", "ECB Interest Rate Decision")  
 - country: 3-letter currency code (USD, EUR, GBP, JPY, etc.)
 - date: YYYY-MM-DD format
 - time: HH:MM format (24-hour UTC)
 - impact: "high", "medium", or "low"
-- forecast: expected numeric value as a string like "2.5%", "250K", "3.50%", "1.2M". ALWAYS provide forecast when available. Must be a short numeric string, NOT a sentence.
-- previous: previous release numeric value as a string like "2.3%", "220K", "3.25%". ALWAYS provide previous when available. Must be a short numeric string, NOT a sentence.
-- actual: actual released numeric value as a string like "2.6%", "260K". MUST be null if the event has not happened yet. Must be a short numeric string, NOT a sentence or description.
+- forecast: short numeric string like "2.5%" or "250K" or null
+- previous: short numeric string like "2.3%" or "220K" or null
+- actual: short numeric string or null. MUST be null for future events after ${today}.
 
-IMPORTANT RULES:
-- forecast and previous MUST be short numeric strings (e.g. "2.5%", "180K", "0.3%"), never sentences or descriptions.
-- actual MUST be null for any event that has not yet been released. NEVER put descriptive text like "below forecast" as actual.
-- For events dated after ${today}, actual MUST always be null.
+Use your knowledge of typical economic calendar schedules. These events happen on regular schedules (monthly, quarterly, etc.). Provide realistic values based on recent economic trends.
 
-Today's date is ${today}.`;
+Today is ${today}. Start your response with [ and end with ].`;
 
   switch (action) {
     case "upcoming":
-      return `${basePrompt}
-
-Return 15-20 upcoming economic events scheduled for the next 7 days that have NOT been released yet (actual should be null). Focus on high-impact events from major economies (US, EU, UK, Japan, China, Canada, Australia).
-
-Return ONLY the JSON array, nothing else.`;
-
+      return `${basePrompt}\n\nProvide 15-20 upcoming economic events for the next 7 days. All actual values must be null. Focus on major economies.`;
     case "ongoing":
-      return `${basePrompt}
-
-Return 5-10 economic events happening TODAY (${today}). Include both events that have been released today (with actual values) and events still pending today (actual is null).
-
-Return ONLY the JSON array, nothing else.`;
-
+      return `${basePrompt}\n\nProvide 5-10 economic events for today (${today}).`;
     case "previous":
-      return `${basePrompt}
-
-Return 15-20 economic events that were released in the past 7 days. These MUST have actual values filled in. Focus on high-impact events from major economies.
-
-Return ONLY the JSON array, nothing else.`;
-
+      return `${basePrompt}\n\nProvide 15-20 economic events from the past 7 days with actual values filled in.`;
     case "all":
     default:
-      return `${basePrompt}
-
-Return 25-30 economic events including:
-- 10 upcoming events (next 7 days, actual is null)
-- 5 events from today
-- 10 recently released events (past 7 days, with actual values)
-
-Focus on high-impact events from major economies (US, EU, UK, Japan, China, Canada, Australia).
-
-Return ONLY the JSON array, nothing else.`;
+      return `${basePrompt}\n\nProvide 25 economic events: ~10 upcoming (next 7 days, actual=null), ~5 today, ~10 past (last 7 days, with actual values). Focus on high-impact events.`;
   }
 }
 
 function parsePerplexityResponse(content: string): EconomicEvent[] {
-  // Remove any markdown code blocks if present
   let cleaned = content.trim();
+  
+  // Remove markdown code blocks
   if (cleaned.startsWith("```json")) {
     cleaned = cleaned.slice(7);
   } else if (cleaned.startsWith("```")) {
@@ -103,20 +79,24 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
   }
   cleaned = cleaned.trim();
 
+  // Try to extract JSON array from the response if it contains extra text
+  const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+  if (arrayMatch) {
+    cleaned = arrayMatch[0];
+  }
+
   try {
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) {
-      console.error("Parsed response is not an array");
+      console.error("Parsed response is not an array, got:", typeof parsed);
       return [];
     }
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Only allow short numeric-like strings (e.g. "2.5%", "180K", "0.3%", "-1.2M")
     function sanitizeValue(val: any): string | undefined {
       if (val == null) return undefined;
       const s = String(val).trim();
-      // Accept values like: 2.5%, 180K, -0.3%, 1.2M, 3.50%, 250, etc.
       if (s.length <= 20 && /^-?[\d.,]+[%KMBTkmbtp]?$/i.test(s)) {
         return s;
       }
@@ -140,7 +120,7 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
       };
     });
   } catch (e) {
-    console.error("Failed to parse response");
+    console.error("Failed to parse response, first 500 chars:", cleaned.slice(0, 500));
     return [];
   }
 }
