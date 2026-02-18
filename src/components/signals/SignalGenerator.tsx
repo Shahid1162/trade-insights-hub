@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Upload, Loader2, Target, TrendingUp, TrendingDown, Clock, AlertCircle } from 'lucide-react';
+import { BarChart3, Upload, Loader2, Target, TrendingUp, TrendingDown, Clock, AlertCircle, ShieldAlert, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignalAnalysis } from '@/lib/types';
@@ -360,7 +360,19 @@ export const SignalGenerator: React.FC = () => {
             </div>
           </div>
 
-          {/* Detailed Analysis */}
+          {/* Risk Warning */}
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-400 mb-1">⚠️ Risk Management Warning</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Always trade as per your own risk tolerance. Never risk more than you can afford to lose. 
+                If you're unsure about proper position sizing, use the <button onClick={(e) => { e.stopPropagation(); const calcNav = document.querySelector('[data-section="calculator"]') as HTMLElement; if (calcNav) calcNav.click(); }} className="text-primary underline underline-offset-2 hover:text-primary/80 font-semibold inline-flex items-center gap-1"><Calculator className="w-3 h-3" />Lot Size Calculator</button> to manage your risk properly before entering any trade.
+              </p>
+            </div>
+          </div>
+
+
           <div className="p-6 rounded-xl bg-card border border-border/50">
             <h4 className="font-semibold mb-4 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-primary" />
