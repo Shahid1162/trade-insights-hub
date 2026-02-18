@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BarChart3, Upload, Loader2, Target, TrendingUp, TrendingDown, Clock, AlertCircle, ShieldAlert, Calculator, Clock4 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,6 +26,26 @@ export const SignalGenerator: React.FC = () => {
   const [isOwner, setIsOwner] = useState(false);
   const [checkingUsage, setCheckingUsage] = useState(false);
   const [confirmationData, setConfirmationData] = useState<{ needed: boolean; note: string } | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Timer effect for loading state
+  useEffect(() => {
+    if (loading) {
+      setElapsedSeconds(0);
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [loading]);
 
   // Check usage on mount and when user changes
   useEffect(() => {
@@ -291,21 +311,37 @@ export const SignalGenerator: React.FC = () => {
         </div>
       )}
 
+      {/* Loading State with Timer */}
+      {loading && (
+        <div className="text-center space-y-4 animate-fade-in">
+          <div className="p-6 rounded-xl bg-card border border-border/50 space-y-4">
+            <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
+            <div>
+              <p className="text-lg font-semibold">Analyzing Charts...</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Running ICT/SMC & Price Action analysis
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-sm font-mono">
+              <Clock className="w-4 h-4 text-primary" />
+              <span>{Math.floor(elapsedSeconds / 60)}:{(elapsedSeconds % 60).toString().padStart(2, '0')}</span>
+              <span className="text-muted-foreground">elapsed</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Typically takes 15-30 seconds</p>
+          </div>
+        </div>
+      )}
+
       {/* Analyze Button */}
-      {!analysis && (
+      {!analysis && !loading && (
         <div className="text-center animate-fade-in">
           <Button
             variant="gradient"
             size="xl"
             onClick={handleAnalyze}
-            disabled={loading || !uploadedImages.tf1 || !uploadedImages.tf2 || (!isOwner && remaining <= 0)}
+            disabled={!uploadedImages.tf1 || !uploadedImages.tf2 || (!isOwner && remaining <= 0)}
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Analyzing Charts...
-              </>
-            ) : !isOwner && remaining <= 0 ? (
+            {!isOwner && remaining <= 0 ? (
               <>
                 <AlertCircle className="w-5 h-5" />
                 Limit Reached
