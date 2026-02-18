@@ -35,16 +35,6 @@ const MainApp = () => {
     return () => window.removeEventListener('navigate-section', handler as EventListener);
   }, []);
 
-  const renderSection = () => {
-    switch (activeSection) {
-      case 'dashboard': return <Dashboard />;
-      case 'signals': return <Suspense fallback={<SectionLoader />}><SignalGenerator /></Suspense>;
-      case 'calculator': return <Suspense fallback={<SectionLoader />}><LotSizeCalculator /></Suspense>;
-      case 'news': return <Suspense fallback={<SectionLoader />}><NewsCalendar /></Suspense>;
-      default: return <Dashboard />;
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
@@ -57,10 +47,21 @@ const MainApp = () => {
         <MobileNav activeSection={activeSection} onSectionChange={setActiveSection} />
       </div>
       
-      {/* Main Content */}
+      {/* Main Content - keep all sections mounted to preserve state */}
       <main className="lg:ml-64 min-h-screen">
         <div className="pt-16 lg:pt-6 pb-12 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
-          {renderSection()}
+          <div className={activeSection === 'dashboard' ? '' : 'hidden'}>
+            <Dashboard />
+          </div>
+          <div className={activeSection === 'signals' ? '' : 'hidden'}>
+            <Suspense fallback={<SectionLoader />}><SignalGenerator /></Suspense>
+          </div>
+          <div className={activeSection === 'calculator' ? '' : 'hidden'}>
+            <Suspense fallback={<SectionLoader />}><LotSizeCalculator /></Suspense>
+          </div>
+          <div className={activeSection === 'news' ? '' : 'hidden'}>
+            <Suspense fallback={<SectionLoader />}><NewsCalendar /></Suspense>
+          </div>
         </div>
       </main>
     </div>

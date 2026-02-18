@@ -254,10 +254,7 @@ export const SignalGenerator: React.FC = () => {
           return (
             <button
               key={type}
-              onClick={() => {
-                setAnalysisType(type);
-                resetAnalysis();
-              }}
+              onClick={() => setAnalysisType(type)}
               className={`p-4 rounded-xl border transition-all duration-200 text-left ${
                 isActive
                   ? 'bg-primary/10 border-primary text-primary'
