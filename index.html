@@ -16,8 +16,16 @@
     <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
     
     <!-- Load Google Fonts asynchronously to avoid render blocking -->
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600;700&display=swap" /></noscript>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" /></noscript>
+    <!-- Critical CSS inlined for faster First Contentful Paint -->
+    <style>
+      :root{--background:40 20% 99%;--foreground:222 47% 11%;--card:40 15% 97%;--primary:173 80% 40%;--primary-foreground:0 0% 100%;--border:220 15% 89%;--muted-foreground:220 10% 44%;--radius:0.75rem}
+      .dark{--background:222 47% 6%;--foreground:210 40% 98%;--card:222 47% 8%;--primary:173 80% 50%;--border:222 30% 18%;--muted-foreground:215 20% 55%}
+      *{box-sizing:border-box;border-color:hsl(var(--border))}
+      body{margin:0;background:hsl(var(--background));color:hsl(var(--foreground));font-family:'Poppins',system-ui,sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
+      #root{min-height:100vh}
+    </style>
     <title>TA5pro - Trading Analysis Platform</title>
     <meta name="description" content="TA5pro - Professional Trading Analysis Platform with real-time market data, signals, and demo trading" />
     <meta name="author" content="TA5pro" />
@@ -35,5 +43,7 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Defer non-critical Fira Code font loading -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" media="print" onload="this.media='all'" />
   </body>
 </html>
