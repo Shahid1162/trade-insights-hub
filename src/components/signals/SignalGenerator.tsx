@@ -430,7 +430,7 @@ export const SignalGenerator: React.FC = () => {
               Key Analysis Points
             </h4>
             <div className="space-y-2">
-              {analysis.analysis.split(/\n+|(?:\d+\.\s)/).filter(line => line.trim().length > 5).map((point, i) => {
+              {(typeof analysis.analysis === 'string' ? analysis.analysis : String(analysis.analysis || '')).split(/\n+|(?:\d+\.\s)/).filter(line => line.trim().length > 5).map((point, i) => {
                 const cleaned = point.replace(/^[-•*#]+\s*/, '').replace(/\*\*/g, '').trim();
                 if (!cleaned || cleaned.length < 5) return null;
                 return (
