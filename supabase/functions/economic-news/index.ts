@@ -29,43 +29,81 @@ function validateAction(action: any): Action {
   return VALID_ACTIONS.includes(sanitized as Action) ? (sanitized as Action) : "all";
 }
 
+function getToday(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+function getDateOffset(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
 function getPromptForAction(action: Action): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getToday();
   
-  const basePrompt = `Search the web for the REAL economic calendar for this week. Use sources like ForexFactory, Investing.com, DailyFX, or TradingEconomics to find ACTUAL scheduled economic events.
+  const basePrompt = `You are an economic calendar data provider. Search the web for REAL economic calendar data for the week of ${today}.
 
-CRITICAL: Return ONLY real, verified economic events that are actually scheduled. Do NOT make up or hallucinate events. Every event must be a real scheduled release.
+Use reliable sources: ForexFactory.com, Investing.com, TradingEconomics.com, DailyFX.com.
 
-Return ONLY a valid JSON array. No markdown, no code blocks, no explanations.
+CRITICAL RULES:
+1. Return ONLY real, verified economic events. Do NOT fabricate events.
+2. Return ONLY a valid JSON array starting with [ and ending with ].
+3. No markdown, no code blocks, no explanations - ONLY the JSON array.
+4. Each object MUST have these exact fields:
+   - id: unique string
+   - title: official event name (e.g. "US Non-Farm Payrolls", "ECB Interest Rate Decision")
+   - country: 3-letter currency code (USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD, CNY)
+   - date: YYYY-MM-DD format
+   - time: HH:MM format (24-hour UTC)
+   - impact: "high", "medium", or "low"
+   - forecast: consensus forecast as string (e.g. "2.5%", "250K") or null
+   - previous: previous value as string or null
+   - actual: released value as string, or null if not yet released
 
-Each object must have exactly these fields:
-- id: unique string identifier
-- title: the exact official name of the economic release (e.g. "US Non-Farm Payrolls", "ECB Interest Rate Decision", "UK CPI y/y")
-- country: 3-letter currency code (USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD, CNY)
-- date: YYYY-MM-DD format
-- time: HH:MM format (24-hour UTC)
-- impact: "high", "medium", or "low" based on typical market impact
-- forecast: the consensus forecast value as a string (e.g. "2.5%", "250K") or null if not available
-- previous: the previous release value as a string or null
-- actual: the actual released value as a string, or null if not yet released
-
-Today is ${today}. Events after today MUST have actual as null.
-Start your response with [ and end with ].`;
+IMPORTANT: Today's date is ${today}.`;
 
   switch (action) {
     case "upcoming":
-      return `${basePrompt}\n\nFind 15-20 REAL upcoming economic events scheduled for the next 7 days from ${today}. Focus on high and medium impact events from major economies (US, EU, UK, Japan, Australia, Canada). All actual values must be null since these haven't happened yet.`;
+      return `${basePrompt}
+
+Find 15-20 REAL upcoming high and medium impact economic events scheduled between ${getDateOffset(1)} and ${getDateOffset(7)}.
+Focus on major economies: US, EU, UK, Japan, Australia, Canada.
+ALL events must have dates AFTER ${today}.
+ALL actual values MUST be null (these events haven't happened yet).`;
+
     case "ongoing":
-      return `${basePrompt}\n\nFind all REAL economic events scheduled for today (${today}). CRITICAL: For events that have ALREADY been released today, you MUST include their actual released values. Do NOT leave actual as null if the data has been published. Check ForexFactory or Investing.com for the released values.`;
+      return `${basePrompt}
+
+Find ALL economic events scheduled for TODAY ${today} ONLY.
+CRITICAL: The date field for EVERY event MUST be exactly "${today}".
+For events that have ALREADY been released today, you MUST include their actual released values - search ForexFactory.com and Investing.com for the latest released data.
+Do NOT leave actual as null if the data has already been published today.
+Include both released and upcoming events for today.`;
+
     case "previous":
-      return `${basePrompt}\n\nFind 15-20 REAL economic events that were released in the past 7 days before ${today}. CRITICAL: You MUST include the actual released values for ALL of these events. Every event in this list should have an actual value since they have already occurred. Check ForexFactory or Investing.com for the released values.`;
+      return `${basePrompt}
+
+Find 15-20 REAL high and medium impact economic events that were ALREADY RELEASED between ${getDateOffset(-7)} and ${getDateOffset(-1)}.
+CRITICAL: ALL events must have dates BEFORE ${today} (between ${getDateOffset(-7)} and ${getDateOffset(-1)}).
+CRITICAL: You MUST include the actual released values for ALL events. Every single event MUST have an actual value because they have already occurred.
+Search ForexFactory.com and Investing.com to find the actual released values.
+Do NOT return any event without an actual value.`;
+
     case "all":
     default:
-      return `${basePrompt}\n\nFind 25-30 REAL economic events: include events from the past 3 days (with actual released values), today's events (with actual if released), and upcoming events for the next 5 days (actual=null). CRITICAL: Past events MUST have actual values filled in.`;
+      return `${basePrompt}
+
+Find 25-30 REAL economic events covering:
+- Past 3 days (${getDateOffset(-3)} to ${getDateOffset(-1)}): MUST include actual released values for all
+- Today (${today}): include actual if already released, null if pending
+- Next 5 days (${getDateOffset(1)} to ${getDateOffset(5)}): actual must be null
+Focus on high and medium impact events from major economies.
+Past events MUST have actual values filled in.`;
   }
 }
 
-function parsePerplexityResponse(content: string): EconomicEvent[] {
+function parsePerplexityResponse(content: string, action: Action): EconomicEvent[] {
   let cleaned = content.trim();
   
   if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
@@ -83,16 +121,16 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
       return [];
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getToday();
 
     function sanitizeValue(val: any): string | undefined {
-      if (val == null || val === "null" || val === "") return undefined;
+      if (val == null || val === "null" || val === "" || val === "N/A" || val === "n/a") return undefined;
       const s = String(val).trim();
       if (s.length <= 30) return s;
       return undefined;
     }
     
-    return parsed.map((ev: any, index: number) => {
+    let events = parsed.map((ev: any, index: number) => {
       const eventDate = String(ev.date || today);
       const isFuture = eventDate > today;
       
@@ -108,6 +146,26 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
         actual: isFuture ? undefined : sanitizeValue(ev.actual),
       };
     });
+
+    // Post-processing: enforce date constraints based on action
+    switch (action) {
+      case "ongoing":
+        // Only keep today's events
+        events = events.map(e => ({ ...e, date: today }));
+        break;
+      case "upcoming":
+        // Only keep future events
+        events = events.filter(e => e.date > today);
+        // Ensure no actual values for future events
+        events = events.map(e => ({ ...e, actual: undefined }));
+        break;
+      case "previous":
+        // Only keep past events
+        events = events.filter(e => e.date < today);
+        break;
+    }
+
+    return events;
   } catch (e) {
     console.error("Failed to parse response, first 500 chars:", cleaned.slice(0, 500));
     return [];
@@ -134,20 +192,18 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: authError } = await supabase.auth.getClaims(token);
-    if (authError || !claimsData?.claims) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const userId = claimsData.claims.sub;
     const body = await req.json().catch(() => ({}));
     const action = validateAction(body?.action);
 
-    console.log(`User ${userId} economic-news request: action=${action}`);
+    console.log(`User ${user.id} economic-news request: action=${action}, today=${getToday()}`);
 
     if (!PERPLEXITY_API_KEY) {
       console.error("PERPLEXITY_API_KEY not configured");
@@ -159,6 +215,10 @@ serve(async (req) => {
 
     const prompt = getPromptForAction(action);
 
+    // Use sonar-pro for ongoing (needs actual values), sonar for others (more reliable JSON)
+    const model = (action === "ongoing" || action === "previous") ? "sonar-pro" : "sonar";
+    const recency = (action === "previous" || action === "all") ? "week" : "day";
+
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
@@ -166,13 +226,13 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar",
+        model,
         messages: [
-          { role: "system", content: "You are an economic calendar data provider. You MUST search the web for REAL economic calendar data. Return ONLY valid JSON arrays. Never fabricate events." },
+          { role: "system", content: "You are an economic calendar data provider. You MUST search the web for REAL economic calendar data from ForexFactory.com, Investing.com, or TradingEconomics.com. Return ONLY a valid JSON array. No markdown code blocks, no explanations, no extra text. Start with [ and end with ]. Never fabricate events. Always include actual released values for past events." },
           { role: "user", content: prompt }
         ],
         temperature: 0.0,
-        search_recency_filter: "week",
+        search_recency_filter: recency,
       }),
     });
 
@@ -189,9 +249,14 @@ serve(async (req) => {
     const content = result.choices?.[0]?.message?.content || "[]";
     
     console.log("Raw response length:", content.length);
+    console.log("Raw response preview:", content.slice(0, 300));
     
-    const data = parsePerplexityResponse(content);
+    const data = parsePerplexityResponse(content, action);
     console.log(`Parsed ${data.length} events for action=${action}`);
+    
+    // Log sample of actual values for debugging
+    const withActual = data.filter(e => e.actual);
+    console.log(`Events with actual values: ${withActual.length}/${data.length}`);
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
