@@ -10,8 +10,8 @@ type AnalysisType = 'intraday' | 'swing' | 'positional';
 
 const timeframeInfo = {
   intraday: { label: 'Intraday', timeframes: ['15min', '5min'], description: 'Short-term scalping and day trading' },
-  swing: { label: 'Swing', timeframes: ['1H', '30min'], description: 'Multi-day position holding' },
-  positional: { label: 'Positional', timeframes: ['4H', '1D'], description: 'Long-term investment positions' },
+  swing: { label: 'Swing', timeframes: ['4H', '1H'], description: 'Multi-day position holding' },
+  positional: { label: 'Positional', timeframes: ['1D', '4H'], description: 'Long-term investment positions' },
 };
 
 const DAILY_LIMIT = 3;
