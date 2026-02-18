@@ -95,11 +95,14 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center space-y-3 animate-fade-in">
+      {/* Welcome Section */}
+      <div className="text-center space-y-4 animate-fade-in">
         <h1 className="text-4xl md:text-5xl font-bold">
-          <span className="gradient-text">TA5</span> AI-Powered Trading Signals
+          Welcome to <span className="gradient-text">TA5</span> Pro
         </h1>
+        <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+          Your all-in-one AI-powered trading companion. Track live cryptocurrency prices, generate smart buy/sell signals, calculate precise lot sizes, and stay ahead with real-time economic news — all in one place.
+        </p>
       </div>
 
       {/* Status Bar */}
