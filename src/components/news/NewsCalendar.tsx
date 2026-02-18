@@ -45,88 +45,87 @@ const timezones = [
   { value: 'Australia/Sydney', label: 'Sydney (AEDT)', offset: '+11:00' },
 ];
 
-// Market impact analysis based on event type
-function getMarketImpact(event: EconomicEvent): { gold: string; crypto: string; currencies: string; goldDir: 'up' | 'down' | 'neutral'; cryptoDir: 'up' | 'down' | 'neutral'; currDir: 'up' | 'down' | 'neutral' } {
+// Market impact analysis - shows prediction for both positive and negative data outcomes
+interface MarketScenario {
+  gold: 'Bullish' | 'Bearish' | 'Neutral';
+  crypto: 'Bullish' | 'Bearish' | 'Neutral';
+  currencies: 'Bullish' | 'Bearish' | 'Neutral';
+  detail: string;
+}
+
+interface MarketImpact {
+  positive: MarketScenario;
+  negative: MarketScenario;
+}
+
+function getMarketImpact(event: EconomicEvent): MarketImpact {
   const title = event.title.toLowerCase();
   const country = event.country;
 
   if (title.includes('interest rate') || title.includes('rate decision')) {
     return {
-      gold: 'Higher rates strengthen USD, pressuring gold lower. Rate cuts are bullish for gold.',
-      crypto: 'Rate hikes reduce risk appetite, bearish for crypto. Cuts boost crypto demand.',
-      currencies: `Hawkish stance strengthens ${country}. Dovish weakens it against peers.`,
-      goldDir: 'down', cryptoDir: 'down', currDir: 'up',
+      positive: { gold: 'Bearish', crypto: 'Bearish', currencies: 'Bullish', detail: `Rate hike strengthens ${country}, pressures gold & crypto.` },
+      negative: { gold: 'Bullish', crypto: 'Bullish', currencies: 'Bearish', detail: `Rate cut weakens ${country}, boosts gold & crypto.` },
     };
   }
   if (title.includes('non-farm') || title.includes('nfp') || title.includes('employment') || title.includes('jobs')) {
     return {
-      gold: 'Strong jobs data strengthens USD, pushing gold down. Weak data supports gold.',
-      crypto: 'Strong employment reduces rate cut expectations, mixed for crypto.',
-      currencies: `Strong jobs boost ${country}. Weak data weakens it.`,
-      goldDir: 'down', cryptoDir: 'neutral', currDir: 'up',
+      positive: { gold: 'Bearish', crypto: 'Bearish', currencies: 'Bullish', detail: `Strong jobs = stronger ${country}, less rate cut hopes.` },
+      negative: { gold: 'Bullish', crypto: 'Bullish', currencies: 'Bearish', detail: `Weak jobs = weaker ${country}, more rate cut bets.` },
     };
   }
   if (title.includes('cpi') || title.includes('inflation') || title.includes('ppi')) {
     return {
-      gold: 'High inflation is bullish for gold as a hedge. Low inflation reduces gold demand.',
-      crypto: 'Rising inflation drives investors to crypto as an alternative store of value.',
-      currencies: `Higher inflation may force rate hikes, initially strengthening ${country}.`,
-      goldDir: 'up', cryptoDir: 'up', currDir: 'neutral',
+      positive: { gold: 'Bullish', crypto: 'Bullish', currencies: 'Neutral', detail: `Higher inflation drives demand for gold & crypto as hedges.` },
+      negative: { gold: 'Bearish', crypto: 'Bearish', currencies: 'Neutral', detail: `Lower inflation reduces hedge demand for gold & crypto.` },
     };
   }
   if (title.includes('gdp')) {
     return {
-      gold: 'Strong GDP reduces safe-haven demand for gold. Weak GDP boosts gold.',
-      crypto: 'Strong growth boosts risk appetite, mildly bullish for crypto.',
-      currencies: `Strong GDP strengthens ${country}. Weak GDP weakens it.`,
-      goldDir: 'down', cryptoDir: 'up', currDir: 'up',
+      positive: { gold: 'Bearish', crypto: 'Bullish', currencies: 'Bullish', detail: `Strong GDP boosts ${country} & risk appetite. Gold loses safe-haven demand.` },
+      negative: { gold: 'Bullish', crypto: 'Bearish', currencies: 'Bearish', detail: `Weak GDP weakens ${country}. Gold rallies on safe-haven flows.` },
     };
   }
   if (title.includes('pmi') || title.includes('manufacturing') || title.includes('services')) {
     return {
-      gold: "Strong PMI reduces gold's safe-haven appeal. Weak PMI supports gold prices.",
-      crypto: 'PMI data has moderate indirect impact on crypto through risk sentiment.',
-      currencies: `Above-50 PMI is bullish for ${country}. Below-50 is bearish.`,
-      goldDir: 'neutral', cryptoDir: 'neutral', currDir: 'up',
+      positive: { gold: 'Bearish', crypto: 'Bullish', currencies: 'Bullish', detail: `Above-50 PMI signals expansion. ${country} strengthens.` },
+      negative: { gold: 'Bullish', crypto: 'Bearish', currencies: 'Bearish', detail: `Below-50 PMI signals contraction. Safe-haven gold rises.` },
     };
   }
   if (title.includes('retail sales') || title.includes('consumer')) {
     return {
-      gold: 'Strong consumer spending reduces gold demand. Weak spending supports gold.',
-      crypto: 'Consumer confidence can boost risk assets including crypto.',
-      currencies: `Strong retail data supports ${country}. Weak data pressures it.`,
-      goldDir: 'down', cryptoDir: 'up', currDir: 'up',
-    };
-  }
-  if (title.includes('trade balance') || title.includes('current account')) {
-    return {
-      gold: 'Trade deficits can weaken USD, supporting gold prices.',
-      crypto: 'Minimal direct impact on crypto markets.',
-      currencies: `Trade surplus strengthens ${country}. Deficit weakens it.`,
-      goldDir: 'neutral', cryptoDir: 'neutral', currDir: 'neutral',
+      positive: { gold: 'Bearish', crypto: 'Bullish', currencies: 'Bullish', detail: `Strong spending boosts ${country} & risk appetite.` },
+      negative: { gold: 'Bullish', crypto: 'Bearish', currencies: 'Bearish', detail: `Weak spending signals slowdown. Gold rallies.` },
     };
   }
   if (title.includes('unemployment') || title.includes('jobless')) {
     return {
-      gold: 'Rising unemployment boosts gold as a safe haven.',
-      crypto: 'Higher unemployment may lead to rate cuts, potentially bullish for crypto.',
-      currencies: `Lower unemployment strengthens ${country}. Higher weakens it.`,
-      goldDir: 'up', cryptoDir: 'up', currDir: 'down',
+      positive: { gold: 'Bullish', crypto: 'Bullish', currencies: 'Bearish', detail: `Rising unemployment = rate cut expectations. Gold & crypto rally.` },
+      negative: { gold: 'Bearish', crypto: 'Bearish', currencies: 'Bullish', detail: `Low unemployment = hawkish outlook. ${country} strengthens.` },
     };
   }
-  // Default
+  if (title.includes('trade balance') || title.includes('current account')) {
+    return {
+      positive: { gold: 'Bearish', crypto: 'Neutral', currencies: 'Bullish', detail: `Trade surplus strengthens ${country}. Gold dips.` },
+      negative: { gold: 'Bullish', crypto: 'Neutral', currencies: 'Bearish', detail: `Trade deficit weakens ${country}. Gold benefits.` },
+    };
+  }
+  if (title.includes('factory') || title.includes('industrial') || title.includes('production')) {
+    return {
+      positive: { gold: 'Bearish', crypto: 'Bullish', currencies: 'Bullish', detail: `Strong output boosts ${country} & risk sentiment.` },
+      negative: { gold: 'Bullish', crypto: 'Bearish', currencies: 'Bearish', detail: `Weak output signals slowdown. Gold rallies.` },
+    };
+  }
   return {
-    gold: 'Monitor this event for potential volatility in gold markets.',
-    crypto: 'This event may create short-term crypto market volatility.',
-    currencies: `Watch for ${country} currency movements around this release.`,
-    goldDir: 'neutral', cryptoDir: 'neutral', currDir: 'neutral',
+    positive: { gold: 'Neutral', crypto: 'Neutral', currencies: 'Bullish', detail: `Positive data generally supports ${country}.` },
+    negative: { gold: 'Neutral', crypto: 'Neutral', currencies: 'Bearish', detail: `Negative data generally pressures ${country}.` },
   };
 }
 
-const DirectionIcon = ({ dir }: { dir: 'up' | 'down' | 'neutral' }) => {
-  if (dir === 'up') return <TrendingUp className="w-3.5 h-3.5 text-bullish" />;
-  if (dir === 'down') return <TrendingDown className="w-3.5 h-3.5 text-bearish" />;
-  return <Minus className="w-3.5 h-3.5 text-muted-foreground" />;
+const SentimentBadge = ({ sentiment }: { sentiment: 'Bullish' | 'Bearish' | 'Neutral' }) => {
+  if (sentiment === 'Bullish') return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-bullish/20 text-bullish border border-bullish/30"><TrendingUp className="w-3 h-3" />Bullish</span>;
+  if (sentiment === 'Bearish') return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-bearish/20 text-bearish border border-bearish/30"><TrendingDown className="w-3 h-3" />Bearish</span>;
+  return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border"><Minus className="w-3 h-3" />Neutral</span>;
 };
 
 export const NewsCalendar: React.FC = () => {
@@ -388,35 +387,55 @@ export const NewsCalendar: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Market Impact Panel */}
+                    {/* Market Impact Panel - Positive vs Negative Scenarios */}
                     {isExpanded && (
-                      <div className="border-t border-border/50 p-4 bg-muted/30 rounded-b-xl space-y-3 animate-fade-in">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Market Impact Analysis</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          <div className="p-3 rounded-lg bg-card border border-amber-500/20">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className="text-lg">🥇</span>
-                              <span className="text-sm font-semibold text-amber-400">Gold (XAU)</span>
-                              <DirectionIcon dir={impact.goldDir} />
-                            </div>
-                            <p className="text-xs text-muted-foreground leading-relaxed">{impact.gold}</p>
+                      <div className="border-t border-border/50 p-4 bg-muted/30 rounded-b-xl space-y-4 animate-fade-in">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Market Impact Prediction</p>
+                        
+                        {/* If Data Comes Positive */}
+                        <div className="p-3 rounded-lg bg-bullish/5 border border-bullish/20">
+                          <div className="flex items-center gap-2 mb-3">
+                            <TrendingUp className="w-4 h-4 text-bullish" />
+                            <span className="text-sm font-bold text-bullish">If Data Comes Positive</span>
                           </div>
-                          <div className="p-3 rounded-lg bg-card border border-primary/20">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className="text-lg">₿</span>
-                              <span className="text-sm font-semibold text-primary">Crypto</span>
-                              <DirectionIcon dir={impact.cryptoDir} />
+                          <div className="grid grid-cols-3 gap-3 mb-2">
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground mb-1">🥇 Gold</p>
+                              <SentimentBadge sentiment={impact.positive.gold} />
                             </div>
-                            <p className="text-xs text-muted-foreground leading-relaxed">{impact.crypto}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-card border border-bullish/20">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className="text-lg">💱</span>
-                              <span className="text-sm font-semibold text-bullish">Currencies</span>
-                              <DirectionIcon dir={impact.currDir} />
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground mb-1">₿ Crypto</p>
+                              <SentimentBadge sentiment={impact.positive.crypto} />
                             </div>
-                            <p className="text-xs text-muted-foreground leading-relaxed">{impact.currencies}</p>
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground mb-1">💱 {event.country}</p>
+                              <SentimentBadge sentiment={impact.positive.currencies} />
+                            </div>
                           </div>
+                          <p className="text-xs text-muted-foreground mt-2">{impact.positive.detail}</p>
+                        </div>
+
+                        {/* If Data Comes Negative */}
+                        <div className="p-3 rounded-lg bg-bearish/5 border border-bearish/20">
+                          <div className="flex items-center gap-2 mb-3">
+                            <TrendingDown className="w-4 h-4 text-bearish" />
+                            <span className="text-sm font-bold text-bearish">If Data Comes Negative</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-3 mb-2">
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground mb-1">🥇 Gold</p>
+                              <SentimentBadge sentiment={impact.negative.gold} />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground mb-1">₿ Crypto</p>
+                              <SentimentBadge sentiment={impact.negative.crypto} />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground mb-1">💱 {event.country}</p>
+                              <SentimentBadge sentiment={impact.negative.currencies} />
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">{impact.negative.detail}</p>
                         </div>
                       </div>
                     )}
