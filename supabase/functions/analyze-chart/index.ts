@@ -214,17 +214,26 @@ sanitizedAnalysisType === 'swing' ?
 - For shorts: TP at sell-side liquidity (equal lows, swing low)
 - Consider partial TP at the first FVG fill or equilibrium level
 
+CRITICAL PRICE ACCURACY INSTRUCTIONS:
+- You MUST read the ACTUAL price levels from the chart's Y-axis/price scale. Do NOT guess or invent prices.
+- Look at the price labels on the right side of the chart to determine the exact price range visible.
+- All entry, TP, and SL values MUST fall within the price range visible on the charts.
+- Each TP level (TP1, TP2, TP3) MUST be a DIFFERENT price. TP1 is nearest, TP2 is mid-range, TP3 is the furthest target.
+- For bullish: entry < TP1 < TP2 < TP3 and SL < entry
+- For bearish: entry > TP1 > TP2 > TP3 and SL > entry
+- Use the correct number of decimal places for the instrument (e.g., 5 decimals for forex pairs like EURUSD, 2 for indices, 1-2 for crypto)
+
 IMPORTANT: Return your response in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 {
   "bias": "bullish" or "bearish",
   "confidence": number between 60-95,
-  "entry": exact price level as number based on the refined OB/FVG on the lower timeframe,
-  "takeProfit": TP1 - first partial target (nearest liquidity/FVG fill) as number,
-  "takeProfit2": TP2 - second target (equilibrium/next OB) as number,
-  "takeProfit3": TP3 - final target (major liquidity pool/swing high or low) as number,
+  "entry": exact price read from chart's Y-axis at the refined OB/FVG level,
+  "takeProfit": TP1 - nearest target price read from chart,
+  "takeProfit2": TP2 - second target price (must differ from TP1),
+  "takeProfit3": TP3 - final target price (must differ from TP1 and TP2),
   "stopLoss": exact price level beyond the OB with buffer,
-  "needsConfirmation": true or false — set to true ONLY if price has NOT yet reached the entry zone, or if a key confirmation (like a CHoCH, BOS, or liquidity sweep) is still pending on the lower timeframe. Set to false if the setup is already confirmed and ready to enter immediately,
-  "confirmationNote": if needsConfirmation is true, provide a short specific instruction like "Wait for CHoCH on 1H at 1.0850 level before entering" or "Wait for sweep of SSL at 1.0800 before looking for long entry". Leave empty string if needsConfirmation is false,
+  "needsConfirmation": true or false,
+  "confirmationNote": if needsConfirmation is true, provide a short specific instruction. Leave empty string if false,
   "analysis": "Key bullet points covering: Market structure, Liquidity, Order Block, FVG, Premium/Discount, R:R for each TP, Partial position plan"
 }`;
 
@@ -243,7 +252,7 @@ IMPORTANT: Return your response in this EXACT JSON format (no markdown, no code 
             content: [
               {
                 type: 'text',
-                text: `Analyze these two chart images for ${sanitizedAnalysisType} trading. The first image is the ${sanitizedTimeframe1} timeframe and the second is the ${sanitizedTimeframe2} timeframe. Look at the price action, identify key ICT/SMC concepts, and provide entry, take profit, and stop loss levels based on what you observe in the charts. Return ONLY valid JSON.`
+                text: `Analyze these two chart images for ${sanitizedAnalysisType} trading. The first image is the ${sanitizedTimeframe1} timeframe and the second is the ${sanitizedTimeframe2} timeframe. CRITICAL: Read the ACTUAL price values from the Y-axis/price scale on the right side of the charts. All entry, SL, and TP levels must be real prices visible on these charts. Do NOT use placeholder or example prices. Each TP must be a distinct price level. Return ONLY valid JSON.`
               },
               {
                 type: 'image_url',
@@ -311,30 +320,26 @@ IMPORTANT: Return your response in this EXACT JSON format (no markdown, no code 
         throw new Error('No JSON found in response');
       }
     } catch (parseError) {
-      console.error('JSON parse error');
+      console.error('JSON parse error, raw content:', content);
       
-      // Return a structured response based on keywords in the content
-      result = {
-        bias: content.toLowerCase().includes('bullish') ? 'bullish' : 'bearish',
-        confidence: 75,
-        entry: 1.0850,
-        takeProfit: 1.0920,
-        takeProfit2: 1.0950,
-        takeProfit3: 1.1000,
-        stopLoss: 1.0810,
-        analysis: content
-      };
+      return new Response(JSON.stringify({ error: 'Failed to parse AI response. Please try again with a clearer chart image.' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    // Validate required fields
+    // Validate required fields - but never use hardcoded fallback prices
     if (!result.bias) result.bias = 'bullish';
     if (!result.confidence) result.confidence = 75;
-    if (!result.entry) result.entry = 1.0850;
-    if (!result.takeProfit) result.takeProfit = result.entry * 1.005;
-    if (!result.takeProfit2) result.takeProfit2 = result.entry * 1.01;
-    if (!result.takeProfit3) result.takeProfit3 = result.entry * 1.02;
-    if (!result.stopLoss) result.stopLoss = result.entry * 0.99;
-    if (!result.analysis) result.analysis = 'Analysis based on chart patterns and ICT/SMC concepts.';
+    if (!result.entry || !result.takeProfit || !result.stopLoss) {
+      return new Response(JSON.stringify({ error: 'AI could not determine price levels from the chart. Please upload a clearer chart with visible price scale.' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!result.takeProfit2) result.takeProfit2 = result.takeProfit;
+    if (!result.takeProfit3) result.takeProfit3 = result.takeProfit2;
+    if (!result.analysis) result.analysis = 'Analysis based on chart patterns.';
 
     // Record usage (skip for owner)
     if (!isOwner) {
