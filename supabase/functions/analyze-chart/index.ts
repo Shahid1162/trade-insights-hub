@@ -362,7 +362,7 @@ Return ONLY this JSON (no markdown, no code blocks, no explanation outside JSON)
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5',
+        model: 'google/gemini-2.5-pro',
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -414,7 +414,8 @@ Think through your analysis step by step internally before producing the final J
     });
 
     if (!response.ok) {
-      console.error('AI Gateway error:', response.status);
+      const errorBody = await response.text();
+      console.error('AI Gateway error:', response.status, errorBody);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }), {
