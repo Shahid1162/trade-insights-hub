@@ -342,21 +342,38 @@ export const SignalGenerator: React.FC = () => {
           </div>
 
           {/* Trade Levels */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="p-4 rounded-xl bg-card border border-border/50 text-center">
               <Target className="w-6 h-6 mx-auto mb-2 text-primary" />
               <p className="text-sm text-muted-foreground mb-1">Entry Price</p>
               <p className="text-2xl font-mono font-bold">{analysis.entry.toFixed(4)}</p>
             </div>
-            <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
-              <TrendingUp className="w-6 h-6 mx-auto mb-2 text-bullish" />
-              <p className="text-sm text-muted-foreground mb-1">Take Profit</p>
-              <p className="text-2xl font-mono font-bold text-bullish">{analysis.takeProfit.toFixed(4)}</p>
-            </div>
             <div className="p-4 rounded-xl bg-card border border-bearish/30 text-center">
               <TrendingDown className="w-6 h-6 mx-auto mb-2 text-bearish" />
               <p className="text-sm text-muted-foreground mb-1">Stop Loss</p>
               <p className="text-2xl font-mono font-bold text-bearish">{analysis.stopLoss.toFixed(4)}</p>
+            </div>
+          </div>
+
+          {/* Multiple Take Profit Levels */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
+              <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
+              <p className="text-xs text-muted-foreground mb-0.5">TP1 — 40% Close</p>
+              <p className="text-xl font-mono font-bold text-bullish">{analysis.takeProfit.toFixed(4)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Nearest liquidity</p>
+            </div>
+            <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
+              <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
+              <p className="text-xs text-muted-foreground mb-0.5">TP2 — 30% Close</p>
+              <p className="text-xl font-mono font-bold text-bullish">{(analysis.takeProfit2 ?? analysis.takeProfit).toFixed(4)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Equilibrium / OB</p>
+            </div>
+            <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
+              <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
+              <p className="text-xs text-muted-foreground mb-0.5">TP3 — 30% Close</p>
+              <p className="text-xl font-mono font-bold text-bullish">{(analysis.takeProfit3 ?? analysis.takeProfit).toFixed(4)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Major liquidity pool</p>
             </div>
           </div>
 

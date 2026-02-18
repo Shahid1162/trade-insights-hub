@@ -26,6 +26,8 @@ export interface SignalAnalysis {
   type: 'intraday' | 'swing' | 'positional';
   entry: number;
   takeProfit: number;
+  takeProfit2?: number;
+  takeProfit3?: number;
   stopLoss: number;
   bias: 'bullish' | 'bearish' | 'neutral';
   confidence: number;
