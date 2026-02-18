@@ -47,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
         className="flex items-center gap-3 p-5 cursor-pointer hover:opacity-80 transition-opacity border-b border-sidebar-border"
         onClick={() => onSectionChange('dashboard')}
       >
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-emerald-400 flex items-center justify-center shadow-lg">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-400 flex items-center justify-center shadow-lg">
           <span className="text-primary-foreground font-bold text-sm">TA5</span>
         </div>
         <span className="text-xl font-bold gradient-text">TA5pro</span>
@@ -55,7 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {navItems.map((item, index) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
           return (
@@ -63,13 +63,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
               key={item.id}
               onClick={() => onSectionChange(item.id)}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 opacity-0 animate-slide-in",
                 isActive
-                  ? 'bg-primary/20 text-foreground font-semibold shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  ? 'bg-primary/20 text-foreground font-semibold shadow-sm scale-[1.02]'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent hover:translate-x-1'
               )}
+              style={{ animationDelay: `${index * 80}ms` }}
             >
-              <Icon className="w-5 h-5" />
+              <Icon className={cn("w-5 h-5 transition-transform duration-300", isActive && "scale-110")} />
               {item.label}
             </button>
           );

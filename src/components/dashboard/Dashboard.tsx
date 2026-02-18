@@ -96,17 +96,17 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="text-center space-y-4 animate-fade-in">
+      <div className="text-center space-y-4 opacity-0 animate-fade-in-up">
         <h1 className="text-4xl md:text-5xl font-bold">
           Welcome to <span className="gradient-text">TA5</span> Pro
         </h1>
-        <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+        <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto leading-relaxed opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
           Your all-in-one AI-powered trading companion. Track live cryptocurrency prices, generate smart buy/sell signals, calculate precise lot sizes, and stay ahead with real-time economic news — all in one place.
         </p>
       </div>
 
       {/* Status Bar */}
-      <div className="flex items-center justify-center gap-4 p-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
+      <div className="flex items-center justify-center gap-4 p-4 rounded-xl bg-card/50 border border-border/50 opacity-0 animate-fade-in-scale" style={{ animationDelay: '250ms' }}>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-bullish animate-pulse"></div>
           <span className="text-sm text-muted-foreground">Live</span>
@@ -118,11 +118,10 @@ export const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Features Section */}
       {/* Loading State */}
       {loading && cryptoAssets.length === 0 && (
         <div className="flex items-center justify-center py-12">
-        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 animate-float">
             <RefreshCw className="w-6 h-6 animate-spin text-primary" />
             <span className="text-muted-foreground">Loading...</span>
           </div>
@@ -131,7 +130,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Live Market Ticker */}
       {cryptoAssets.length > 0 && (
-        <div className="relative overflow-hidden py-4 rounded-xl bg-card/50 border border-border/50 animate-fade-in">
+        <div className="relative overflow-hidden py-4 rounded-xl bg-card/50 border border-border/50 opacity-0 animate-fade-in-scale" style={{ animationDelay: '350ms' }}>
           <div className="flex animate-ticker gap-8">
             {[...cryptoAssets, ...cryptoAssets].map((stock, i) => (
               <div 
@@ -151,7 +150,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Crypto Section */}
       {cryptoAssets.length > 0 && (
-        <div className="space-y-6">
+        <div className="space-y-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '450ms' }}>
           <MarketSection
             title="Cryptocurrency"
             icon={<Bitcoin className="w-5 h-5" />}
@@ -161,19 +160,19 @@ export const Dashboard: React.FC = () => {
       )}
 
       {/* Features Section */}
-      <div className="space-y-4 animate-fade-in">
-        <h2 className="text-xl font-semibold text-center">
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-center opacity-0 animate-fade-in" style={{ animationDelay: '500ms' }}>
           Everything you need for <span className="text-primary">smarter trading</span>
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {features.map((feature, index) => (
             <div
               key={feature.title}
-              className={`p-5 rounded-xl bg-gradient-to-br ${feature.color} border ${feature.borderColor} hover:scale-[1.02] transition-all duration-300`}
-              style={{ animationDelay: `${index * 80}ms` }}
+              className={`p-5 rounded-xl bg-gradient-to-br ${feature.color} border ${feature.borderColor} opacity-0 animate-fade-in-up hover:scale-[1.03] hover:shadow-lg transition-all duration-300 cursor-default`}
+              style={{ animationDelay: `${550 + index * 100}ms` }}
             >
               <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-background/50 text-foreground shrink-0">
+                <div className="p-2 rounded-lg bg-background/50 text-foreground shrink-0 animate-float" style={{ animationDelay: `${index * 200}ms` }}>
                   {feature.icon}
                 </div>
                 <div>
