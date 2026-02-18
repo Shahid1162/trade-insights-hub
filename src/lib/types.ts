@@ -24,6 +24,7 @@ export interface WatchlistItem {
 
 export interface SignalAnalysis {
   type: 'intraday' | 'swing' | 'positional';
+  instrument?: string;
   entry: number;
   takeProfit: number;
   takeProfit2?: number;
