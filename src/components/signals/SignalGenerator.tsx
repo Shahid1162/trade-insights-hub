@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Upload, Loader2, Target, TrendingUp, TrendingDown, Clock, AlertCircle, ShieldAlert, Calculator } from 'lucide-react';
+import { BarChart3, Upload, Loader2, Target, TrendingUp, TrendingDown, Clock, AlertCircle, ShieldAlert, Calculator, Clock4 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignalAnalysis } from '@/lib/types';
@@ -25,6 +25,7 @@ export const SignalGenerator: React.FC = () => {
   const [remaining, setRemaining] = useState<number>(DAILY_LIMIT);
   const [isOwner, setIsOwner] = useState(false);
   const [checkingUsage, setCheckingUsage] = useState(false);
+  const [confirmationData, setConfirmationData] = useState<{ needed: boolean; note: string } | null>(null);
 
   // Check usage on mount and when user changes
   useEffect(() => {
@@ -165,6 +166,11 @@ export const SignalGenerator: React.FC = () => {
       };
       
       setAnalysis(analysisResult);
+      setConfirmationData(
+        data.needsConfirmation 
+          ? { needed: true, note: data.confirmationNote || 'Wait for confirmation before entering.' }
+          : null
+      );
       toast.success('Analysis complete!');
     } catch (error) {
       console.error('Analysis error:', error);
@@ -342,6 +348,17 @@ export const SignalGenerator: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Confirmation Warning - only shown when needed */}
+          {confirmationData?.needed && (
+            <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 flex items-start gap-3 animate-fade-in">
+              <Clock4 className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-primary mb-1">⏳ Wait for Confirmation</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{confirmationData.note}</p>
+              </div>
+            </div>
+          )}
 
           {/* Trade Levels */}
           <div className="grid grid-cols-2 gap-4">
