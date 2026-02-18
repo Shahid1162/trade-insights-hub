@@ -42,9 +42,14 @@ Each event must have these exact fields:
 - date: YYYY-MM-DD format
 - time: HH:MM format (24-hour UTC)
 - impact: "high", "medium", or "low"
-- forecast: expected value (number or string like "2.5%" or "250K"), null if not available
-- previous: previous release value, null if not available
-- actual: actual released value, null if not yet released
+- forecast: expected numeric value as a string like "2.5%", "250K", "3.50%", "1.2M". ALWAYS provide forecast when available. Must be a short numeric string, NOT a sentence.
+- previous: previous release numeric value as a string like "2.3%", "220K", "3.25%". ALWAYS provide previous when available. Must be a short numeric string, NOT a sentence.
+- actual: actual released numeric value as a string like "2.6%", "260K". MUST be null if the event has not happened yet. Must be a short numeric string, NOT a sentence or description.
+
+IMPORTANT RULES:
+- forecast and previous MUST be short numeric strings (e.g. "2.5%", "180K", "0.3%"), never sentences or descriptions.
+- actual MUST be null for any event that has not yet been released. NEVER put descriptive text like "below forecast" as actual.
+- For events dated after ${today}, actual MUST always be null.
 
 Today's date is ${today}.`;
 
@@ -104,18 +109,36 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
       console.error("Parsed response is not an array");
       return [];
     }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Only allow short numeric-like strings (e.g. "2.5%", "180K", "0.3%", "-1.2M")
+    function sanitizeValue(val: any): string | undefined {
+      if (val == null) return undefined;
+      const s = String(val).trim();
+      // Accept values like: 2.5%, 180K, -0.3%, 1.2M, 3.50%, 250, etc.
+      if (s.length <= 20 && /^-?[\d.,]+[%KMBTkmbtp]?$/i.test(s)) {
+        return s;
+      }
+      return undefined;
+    }
     
-    return parsed.map((ev: any, index: number) => ({
-      id: String(ev.id || `event-${index}`),
-      title: String(ev.title || "Unknown Event").slice(0, 200),
-      country: String(ev.country || "USD").toUpperCase().slice(0, 3),
-      date: String(ev.date || new Date().toISOString().split('T')[0]),
-      time: String(ev.time || "00:00").slice(0, 5),
-      impact: ["high", "medium", "low"].includes(ev.impact) ? ev.impact : "medium",
-      forecast: ev.forecast ?? undefined,
-      previous: ev.previous ?? undefined,
-      actual: ev.actual ?? undefined,
-    }));
+    return parsed.map((ev: any, index: number) => {
+      const eventDate = String(ev.date || today);
+      const isFuture = eventDate > today;
+      
+      return {
+        id: String(ev.id || `event-${index}`),
+        title: String(ev.title || "Unknown Event").slice(0, 200),
+        country: String(ev.country || "USD").toUpperCase().slice(0, 3),
+        date: eventDate,
+        time: String(ev.time || "00:00").slice(0, 5),
+        impact: ["high", "medium", "low"].includes(ev.impact) ? ev.impact : "medium",
+        forecast: sanitizeValue(ev.forecast),
+        previous: sanitizeValue(ev.previous),
+        actual: isFuture ? undefined : sanitizeValue(ev.actual),
+      };
+    });
   } catch (e) {
     console.error("Failed to parse response");
     return [];
