@@ -219,9 +219,11 @@ IMPORTANT: Return your response in this EXACT JSON format (no markdown, no code 
   "bias": "bullish" or "bearish",
   "confidence": number between 60-95,
   "entry": exact price level as number based on the refined OB/FVG on the lower timeframe,
-  "takeProfit": exact price level at the next liquidity pool,
+  "takeProfit": TP1 - first partial target (nearest liquidity/FVG fill) as number,
+  "takeProfit2": TP2 - second target (equilibrium/next OB) as number,
+  "takeProfit3": TP3 - final target (major liquidity pool/swing high or low) as number,
   "stopLoss": exact price level beyond the OB with buffer,
-  "analysis": "Detailed markdown analysis covering: 1) Market Structure on both TFs 2) Liquidity pools identified 3) Order Block used for entry 4) FVG confluence 5) Premium/Discount zone confirmation 6) Killzone timing 7) Risk:Reward ratio calculation 8) Step-by-step trade execution plan"
+  "analysis": "Detailed markdown analysis covering: 1) Market Structure on both TFs 2) Liquidity pools identified 3) Order Block used for entry 4) FVG confluence 5) Premium/Discount zone confirmation 6) Killzone timing 7) Risk:Reward ratio for each TP level 8) Partial position management plan (e.g. close 40% at TP1, 30% at TP2, 30% at TP3)"
 }`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -315,6 +317,8 @@ IMPORTANT: Return your response in this EXACT JSON format (no markdown, no code 
         confidence: 75,
         entry: 1.0850,
         takeProfit: 1.0920,
+        takeProfit2: 1.0950,
+        takeProfit3: 1.1000,
         stopLoss: 1.0810,
         analysis: content
       };
@@ -324,7 +328,9 @@ IMPORTANT: Return your response in this EXACT JSON format (no markdown, no code 
     if (!result.bias) result.bias = 'bullish';
     if (!result.confidence) result.confidence = 75;
     if (!result.entry) result.entry = 1.0850;
-    if (!result.takeProfit) result.takeProfit = result.entry * 1.01;
+    if (!result.takeProfit) result.takeProfit = result.entry * 1.005;
+    if (!result.takeProfit2) result.takeProfit2 = result.entry * 1.01;
+    if (!result.takeProfit3) result.takeProfit3 = result.entry * 1.02;
     if (!result.stopLoss) result.stopLoss = result.entry * 0.99;
     if (!result.analysis) result.analysis = 'Analysis based on chart patterns and ICT/SMC concepts.';
 
