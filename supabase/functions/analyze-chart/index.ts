@@ -362,7 +362,7 @@ Return ONLY this JSON (no markdown, no code blocks, no explanation outside JSON)
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-pro',
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -377,15 +377,21 @@ Chart 2: ${sanitizedTimeframe2} timeframe (use for entry refinement, OB/FVG iden
 
 Analysis type: ${sanitizedAnalysisType}
 
-INSTRUCTIONS:
-1. Read the Y-axis carefully for EXACT price levels
-2. Identify swing structure, BOS/CHoCH, liquidity pools
-3. Find valid Order Blocks and Fair Value Gaps
-4. Determine premium/discount zone
-5. Check if liquidity has been swept
-6. Only provide a signal if a genuine ICT/SMC setup exists
-7. Be HONEST about confidence — if the setup is weak, say so
-8. Return ONLY valid JSON`
+CRITICAL INSTRUCTIONS — READ CAREFULLY:
+1. ZOOM INTO the Y-axis on BOTH charts. Read EXACT price values from the scale markings. Do NOT estimate — use the grid lines and labels.
+2. Identify the CURRENT PRICE first (last candle's close). Write it down mentally before anything else.
+3. Map ALL swing highs and lows with their EXACT prices from the Y-axis.
+4. Identify BOS/CHoCH — note the EXACT price where structure broke.
+5. Find Order Blocks — note the EXACT open and close prices of the OB candle.
+6. Check for Fair Value Gaps — note the EXACT high of candle 1 and low of candle 3.
+7. Determine if price is in premium or discount relative to the dealing range.
+8. Check if any liquidity (equal highs/lows, swing points) has been swept.
+9. ONLY provide a signal if a genuine, high-probability ICT/SMC setup exists with multiple confluences.
+10. If the setup is weak or unclear, set confidence to 60-65 and needsConfirmation to true.
+11. DOUBLE-CHECK: Entry must be at a valid OB/FVG level. SL must be beyond the OB. TPs must align with liquidity pools.
+12. VERIFY price ordering: Bullish → SL < Entry < TP1 < TP2 < TP3. Bearish → SL > Entry > TP1 > TP2 > TP3.
+
+Think through your analysis step by step internally before producing the final JSON. Return ONLY valid JSON.`
               },
               {
                 type: 'image_url',
@@ -402,8 +408,8 @@ INSTRUCTIONS:
             ]
           }
         ],
-        max_tokens: 6000,
-        temperature: 0.1,
+        max_tokens: 8000,
+        temperature: 0.05,
       }),
     });
 
@@ -473,6 +479,30 @@ INSTRUCTIONS:
     if (!result.takeProfit2) result.takeProfit2 = result.takeProfit;
     if (!result.takeProfit3) result.takeProfit3 = result.takeProfit2;
     if (!result.analysis) result.analysis = 'Analysis based on chart patterns.';
+
+    // Validate price level ordering
+    const isBullish = result.bias === 'bullish';
+    const pricesValid = isBullish
+      ? (result.stopLoss < result.entry && result.entry < result.takeProfit && result.takeProfit <= result.takeProfit2 && result.takeProfit2 <= result.takeProfit3)
+      : (result.stopLoss > result.entry && result.entry > result.takeProfit && result.takeProfit >= result.takeProfit2 && result.takeProfit2 >= result.takeProfit3);
+
+    if (!pricesValid) {
+      console.error('Price ordering invalid:', { bias: result.bias, sl: result.stopLoss, entry: result.entry, tp1: result.takeProfit, tp2: result.takeProfit2, tp3: result.takeProfit3 });
+      return new Response(JSON.stringify({ error: 'Analysis produced inconsistent price levels. Please try again with clearer chart images showing the full price scale.' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate that SL is not unreasonably far from entry (sanity check)
+    const slDistance = Math.abs(result.entry - result.stopLoss);
+    const tp1Distance = Math.abs(result.takeProfit - result.entry);
+    if (tp1Distance < slDistance * 0.5) {
+      // R:R less than 1:0.5 is too poor — flag it
+      result.needsConfirmation = true;
+      result.confirmationNote = (result.confirmationNote || '') + ' Warning: Risk-to-reward ratio is unfavorable. Consider waiting for a better entry.';
+      if (result.confidence > 65) result.confidence = 65;
+    }
 
     // Record usage (skip for owner)
     if (!isOwner) {
