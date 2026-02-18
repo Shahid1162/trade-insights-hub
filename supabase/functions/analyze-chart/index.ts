@@ -223,7 +223,9 @@ IMPORTANT: Return your response in this EXACT JSON format (no markdown, no code 
   "takeProfit2": TP2 - second target (equilibrium/next OB) as number,
   "takeProfit3": TP3 - final target (major liquidity pool/swing high or low) as number,
   "stopLoss": exact price level beyond the OB with buffer,
-  "analysis": "Detailed markdown analysis covering: 1) Market Structure on both TFs 2) Liquidity pools identified 3) Order Block used for entry 4) FVG confluence 5) Premium/Discount zone confirmation 6) Killzone timing 7) Risk:Reward ratio for each TP level 8) Partial position management plan (e.g. close 40% at TP1, 30% at TP2, 30% at TP3)"
+  "needsConfirmation": true or false — set to true ONLY if price has NOT yet reached the entry zone, or if a key confirmation (like a CHoCH, BOS, or liquidity sweep) is still pending on the lower timeframe. Set to false if the setup is already confirmed and ready to enter immediately,
+  "confirmationNote": if needsConfirmation is true, provide a short specific instruction like "Wait for CHoCH on 1H at 1.0850 level before entering" or "Wait for sweep of SSL at 1.0800 before looking for long entry". Leave empty string if needsConfirmation is false,
+  "analysis": "Key bullet points covering: Market structure, Liquidity, Order Block, FVG, Premium/Discount, R:R for each TP, Partial position plan"
 }`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
