@@ -368,24 +368,22 @@ export const NewsCalendar: React.FC = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-6 text-sm">
-                          {event.actual && (
-                            <div className="text-center">
-                              <p className="text-muted-foreground text-xs mb-1">Actual</p>
+                          <div className="text-center">
+                            <p className="text-muted-foreground text-xs mb-1">Actual</p>
+                            {event.actual ? (
                               <p className="font-mono font-bold text-primary">{event.actual}</p>
-                            </div>
-                          )}
-                          {event.forecast && (
-                            <div className="text-center">
-                              <p className="text-muted-foreground text-xs mb-1">Forecast</p>
-                              <p className="font-mono font-medium">{event.forecast}</p>
-                            </div>
-                          )}
-                          {event.previous && (
-                            <div className="text-center">
-                              <p className="text-muted-foreground text-xs mb-1">Previous</p>
-                              <p className="font-mono text-muted-foreground">{event.previous}</p>
-                            </div>
-                          )}
+                            ) : (
+                              <p className="font-mono text-xs text-muted-foreground/50">Awaiting</p>
+                            )}
+                          </div>
+                          <div className="text-center">
+                            <p className="text-muted-foreground text-xs mb-1">Forecast</p>
+                            <p className="font-mono font-medium">{event.forecast || '—'}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-muted-foreground text-xs mb-1">Previous</p>
+                            <p className="font-mono text-muted-foreground">{event.previous || '—'}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
