@@ -356,26 +356,40 @@ export const SignalGenerator: React.FC = () => {
           </div>
 
           {/* Multiple Take Profit Levels */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
-              <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
-              <p className="text-xs text-muted-foreground mb-0.5">TP1 — 40% Close</p>
-              <p className="text-xl font-mono font-bold text-bullish">{analysis.takeProfit.toFixed(4)}</p>
-              <p className="text-xs text-muted-foreground mt-1">Nearest liquidity</p>
-            </div>
-            <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
-              <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
-              <p className="text-xs text-muted-foreground mb-0.5">TP2 — 30% Close</p>
-              <p className="text-xl font-mono font-bold text-bullish">{(analysis.takeProfit2 ?? analysis.takeProfit).toFixed(4)}</p>
-              <p className="text-xs text-muted-foreground mt-1">Equilibrium / OB</p>
-            </div>
-            <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
-              <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
-              <p className="text-xs text-muted-foreground mb-0.5">TP3 — 30% Close</p>
-              <p className="text-xl font-mono font-bold text-bullish">{(analysis.takeProfit3 ?? analysis.takeProfit).toFixed(4)}</p>
-              <p className="text-xs text-muted-foreground mt-1">Major liquidity pool</p>
-            </div>
-          </div>
+          {(() => {
+            const risk = Math.abs(analysis.entry - analysis.stopLoss);
+            const tp1 = analysis.takeProfit;
+            const tp2 = analysis.takeProfit2 ?? analysis.takeProfit;
+            const tp3 = analysis.takeProfit3 ?? analysis.takeProfit;
+            const rr1 = risk > 0 ? (Math.abs(tp1 - analysis.entry) / risk).toFixed(1) : '—';
+            const rr2 = risk > 0 ? (Math.abs(tp2 - analysis.entry) / risk).toFixed(1) : '—';
+            const rr3 = risk > 0 ? (Math.abs(tp3 - analysis.entry) / risk).toFixed(1) : '—';
+            return (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
+                  <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
+                  <p className="text-xs text-muted-foreground mb-0.5">TP1 — 40% Close</p>
+                  <p className="text-xl font-mono font-bold text-bullish">{tp1.toFixed(4)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Nearest liquidity</p>
+                  <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold bg-bullish/15 text-bullish border border-bullish/30">R:R 1:{rr1}</span>
+                </div>
+                <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
+                  <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
+                  <p className="text-xs text-muted-foreground mb-0.5">TP2 — 30% Close</p>
+                  <p className="text-xl font-mono font-bold text-bullish">{tp2.toFixed(4)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Equilibrium / OB</p>
+                  <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold bg-bullish/15 text-bullish border border-bullish/30">R:R 1:{rr2}</span>
+                </div>
+                <div className="p-4 rounded-xl bg-card border border-bullish/30 text-center">
+                  <TrendingUp className="w-5 h-5 mx-auto mb-2 text-bullish" />
+                  <p className="text-xs text-muted-foreground mb-0.5">TP3 — 30% Close</p>
+                  <p className="text-xl font-mono font-bold text-bullish">{tp3.toFixed(4)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Major liquidity pool</p>
+                  <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-bold bg-bullish/15 text-bullish border border-bullish/30">R:R 1:{rr3}</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Risk Warning */}
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
