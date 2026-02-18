@@ -42,20 +42,20 @@ function getDateOffset(days: number): string {
 function getPromptForAction(action: Action): string {
   const today = getToday();
   
-  const basePrompt = `Search the web for the REAL economic calendar. Use ForexFactory.com or Investing.com.
+  const basePrompt = `What are the real scheduled economic calendar events this week? Include events like CPI, GDP, NFP, interest rate decisions, PMI, unemployment, retail sales, etc.
 
-Return ONLY a JSON array. No markdown, no code blocks, no text. Start with [ end with ].
+Return ONLY a JSON array. No markdown, no explanation, no code blocks. Start with [ and end with ].
 
-Each object: { "id": "string", "title": "event name", "country": "USD/EUR/GBP/JPY/AUD/CAD/CHF/NZD/CNY", "date": "YYYY-MM-DD", "time": "HH:MM" (UTC 24h), "impact": "high/medium/low", "forecast": "value or null", "previous": "value or null", "actual": "value or null" }
+Each object must have: { "id": "unique-string", "title": "event name", "country": "USD", "date": "YYYY-MM-DD", "time": "HH:MM", "impact": "high", "forecast": "value or null", "previous": "value or null", "actual": "value or null" }
 
-Today is ${today}.`;
+Countries: USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD, CNY. Impact: high, medium, low. Time in UTC 24h format. Today is ${today}.`;
 
   switch (action) {
     case "upcoming":
-      return `${basePrompt}\n\nFind 15-20 upcoming high/medium impact events from ${getDateOffset(1)} to ${getDateOffset(7)}. Major economies only. All actual=null.`;
+      return `${basePrompt}\n\nList 15-20 upcoming economic events from ${getDateOffset(1)} to ${getDateOffset(7)}. Focus on high and medium impact. Set actual to null for all.`;
     case "all":
     default:
-      return `${basePrompt}\n\nFind 20-25 events: past 3 days (${getDateOffset(-3)} to ${getDateOffset(-1)}) with actual values, today (${today}) with actual if released, next 5 days (${getDateOffset(1)} to ${getDateOffset(5)}) actual=null. High/medium impact, major economies.`;
+      return `${basePrompt}\n\nList 20-25 economic events covering: events from ${getDateOffset(-3)} to ${today} (include actual released values where available), and upcoming events from ${getDateOffset(1)} to ${getDateOffset(5)} (actual=null). Focus on high and medium impact from major economies.`;
   }
 }
 
@@ -148,13 +148,12 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar",
+        model: "sonar-pro",
         messages: [
-          { role: "system", content: "Return ONLY valid JSON arrays of economic events. No extra text." },
+          { role: "system", content: "You are an economic calendar data provider. Return ONLY valid JSON arrays. No text, no markdown, no explanation. Just the JSON array." },
           { role: "user", content: getPromptForAction(action) }
         ],
         temperature: 0.0,
-        search_recency_filter: "week",
       }),
     });
 
