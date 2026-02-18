@@ -1,8 +1,53 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bitcoin, RefreshCw } from 'lucide-react';
+import { Bitcoin, RefreshCw, BarChart3, Calculator, Newspaper, Zap, TrendingUp, Shield } from 'lucide-react';
 import { MarketSection } from './MarketSection';
 import { Stock } from '@/lib/types';
 import { getCryptoPrices, CryptoTicker } from '@/lib/binanceApi';
+
+const features = [
+  {
+    icon: <BarChart3 className="w-6 h-6" />,
+    title: 'AI Trading Signals',
+    description: 'Get real-time buy/sell signals powered by advanced AI analysis across multiple timeframes and indicators.',
+    color: 'from-primary/20 to-primary/5',
+    borderColor: 'border-primary/30',
+  },
+  {
+    icon: <Calculator className="w-6 h-6" />,
+    title: 'Lot Size Calculator',
+    description: 'Precisely calculate your position size based on risk percentage, stop-loss, and account balance.',
+    color: 'from-amber-500/20 to-amber-500/5',
+    borderColor: 'border-amber-500/30',
+  },
+  {
+    icon: <Newspaper className="w-6 h-6" />,
+    title: 'Economic Calendar',
+    description: 'Track high-impact economic events worldwide with real-time updates, forecasts, and timezone support.',
+    color: 'from-blue-500/20 to-blue-500/5',
+    borderColor: 'border-blue-500/30',
+  },
+  {
+    icon: <TrendingUp className="w-6 h-6" />,
+    title: 'Live Market Data',
+    description: 'Monitor cryptocurrency prices in real-time with auto-refreshing data directly from Binance.',
+    color: 'from-bullish/20 to-bullish/5',
+    borderColor: 'border-bullish/30',
+  },
+  {
+    icon: <Zap className="w-6 h-6" />,
+    title: 'Chart Analysis',
+    description: 'Upload any chart and get instant AI-powered technical analysis with key support/resistance levels.',
+    color: 'from-purple-500/20 to-purple-500/5',
+    borderColor: 'border-purple-500/30',
+  },
+  {
+    icon: <Shield className="w-6 h-6" />,
+    title: 'Risk Management',
+    description: 'Built-in tools to manage your risk per trade, ensuring disciplined and consistent trading.',
+    color: 'from-bearish/20 to-bearish/5',
+    borderColor: 'border-bearish/30',
+  },
+];
 
 export const Dashboard: React.FC = () => {
   const [cryptoAssets, setCryptoAssets] = useState<Stock[]>([]);
@@ -68,6 +113,32 @@ export const Dashboard: React.FC = () => {
             Updated: {lastUpdated.toLocaleTimeString()}
           </span>
         )}
+      </div>
+
+      {/* Features Section */}
+      <div className="space-y-4 animate-fade-in">
+        <h2 className="text-xl font-semibold text-center">
+          Everything you need for <span className="text-primary">smarter trading</span>
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {features.map((feature, index) => (
+            <div
+              key={feature.title}
+              className={`p-5 rounded-xl bg-gradient-to-br ${feature.color} border ${feature.borderColor} hover:scale-[1.02] transition-all duration-300`}
+              style={{ animationDelay: `${index * 80}ms` }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-background/50 text-foreground shrink-0">
+                  {feature.icon}
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-1">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Loading State */}
