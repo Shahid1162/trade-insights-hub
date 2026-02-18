@@ -47,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
         className="flex items-center gap-3 p-5 cursor-pointer hover:opacity-80 transition-opacity border-b border-sidebar-border"
         onClick={() => onSectionChange('dashboard')}
       >
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-400 flex items-center justify-center shadow-lg">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-emerald-400 flex items-center justify-center shadow-lg">
           <span className="text-primary-foreground font-bold text-sm">TA5</span>
         </div>
         <span className="text-xl font-bold gradient-text">TA5pro</span>
