@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calculator, DollarSign, Percent, Target, AlertCircle, Search } from 'lucide-react';
+import { Calculator, DollarSign, Percent, Target, AlertCircle, Search, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { LotSizeResult } from '@/lib/types';
@@ -74,6 +74,11 @@ export const LotSizeCalculator: React.FC = () => {
     const pipValue = pipValues[pair] || 10;
 
     if (isNaN(balance) || isNaN(risk) || isNaN(slPips) || slPips === 0) {
+      return;
+    }
+
+    if (balance < 1000) {
+      setResult(null);
       return;
     }
 
@@ -192,6 +197,14 @@ export const LotSizeCalculator: React.FC = () => {
               placeholder="10000"
             />
           </div>
+          {parseFloat(accountBalance) > 0 && parseFloat(accountBalance) < 1000 && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-sm">
+              <Info className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+              <p className="text-destructive">
+                A minimum balance of <span className="font-semibold">$1,000</span> is recommended to start your journey in the forex market.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Risk Percentage */}
