@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calculator, DollarSign, Percent, Target, AlertCircle } from 'lucide-react';
+import { Calculator, DollarSign, Percent, Target, AlertCircle, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { LotSizeResult } from '@/lib/types';
@@ -45,8 +45,14 @@ export const LotSizeCalculator: React.FC = () => {
   const [riskPercentage, setRiskPercentage] = useState<string>('1');
   const [stopLossPips, setStopLossPips] = useState<string>('50');
   const [result, setResult] = useState<LotSizeResult | null>(null);
+  const [pairSearch, setPairSearch] = useState('');
 
-  const pairs = useMemo(() => Object.keys(pipValues), []);
+  const allPairs = useMemo(() => Object.keys(pipValues), []);
+  const filteredPairs = useMemo(() => {
+    if (!pairSearch) return allPairs;
+    const q = pairSearch.toUpperCase();
+    return allPairs.filter(p => p.includes(q));
+  }, [allPairs, pairSearch]);
 
   const calculateLotSize = () => {
     if (!isAuthenticated) {
@@ -95,12 +101,22 @@ export const LotSizeCalculator: React.FC = () => {
             <Target className="w-4 h-4 text-primary" />
             Trading Pair
           </label>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={pairSearch}
+              onChange={(e) => setPairSearch(e.target.value)}
+              className="w-full trading-input pl-9"
+              placeholder="Search pairs..."
+            />
+          </div>
           <select
             value={pair}
             onChange={(e) => setPair(e.target.value)}
             className="w-full trading-input"
           >
-            {pairs.map((p) => (
+            {filteredPairs.map((p) => (
               <option key={p} value={p}>
                 {p} (Pip Value: ${pipValues[p]})
               </option>
