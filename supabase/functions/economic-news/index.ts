@@ -56,12 +56,12 @@ Start your response with [ and end with ].`;
     case "upcoming":
       return `${basePrompt}\n\nFind 15-20 REAL upcoming economic events scheduled for the next 7 days from ${today}. Focus on high and medium impact events from major economies (US, EU, UK, Japan, Australia, Canada). All actual values must be null since these haven't happened yet.`;
     case "ongoing":
-      return `${basePrompt}\n\nFind all REAL economic events scheduled for today (${today}). Include their actual values if they have already been released today.`;
+      return `${basePrompt}\n\nFind all REAL economic events scheduled for today (${today}). CRITICAL: For events that have ALREADY been released today, you MUST include their actual released values. Do NOT leave actual as null if the data has been published. Check ForexFactory or Investing.com for the released values.`;
     case "previous":
-      return `${basePrompt}\n\nFind 15-20 REAL economic events that were released in the past 7 days before ${today}. Include their actual released values.`;
+      return `${basePrompt}\n\nFind 15-20 REAL economic events that were released in the past 7 days before ${today}. CRITICAL: You MUST include the actual released values for ALL of these events. Every event in this list should have an actual value since they have already occurred. Check ForexFactory or Investing.com for the released values.`;
     case "all":
     default:
-      return `${basePrompt}\n\nFind 25-30 REAL economic events: include events from the past 3 days (with actual values), today's events, and upcoming events for the next 5 days (actual=null). Focus on high-impact events from major economies.`;
+      return `${basePrompt}\n\nFind 25-30 REAL economic events: include events from the past 3 days (with actual released values), today's events (with actual if released), and upcoming events for the next 5 days (actual=null). CRITICAL: Past events MUST have actual values filled in.`;
   }
 }
 
@@ -86,9 +86,9 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
     const today = new Date().toISOString().split('T')[0];
 
     function sanitizeValue(val: any): string | undefined {
-      if (val == null) return undefined;
+      if (val == null || val === "null" || val === "") return undefined;
       const s = String(val).trim();
-      if (s.length <= 20 && /^-?[\d.,]+[%KMBTkmbtp]?$/i.test(s)) return s;
+      if (s.length <= 30) return s;
       return undefined;
     }
     
