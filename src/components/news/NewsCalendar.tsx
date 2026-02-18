@@ -226,8 +226,6 @@ export const NewsCalendar: React.FC = () => {
 
   useEffect(() => {
     fetchEconomicNews(categoryFilter);
-    const interval = setInterval(() => fetchEconomicNews(categoryFilter), 2 * 60 * 1000);
-    return () => clearInterval(interval);
   }, [categoryFilter]);
 
   const formatDate = (dateStr: string) => {
