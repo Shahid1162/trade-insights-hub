@@ -2,7 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -10,7 +9,6 @@ const corsHeaders = {
 
 const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
 
-// Input validation
 const VALID_ACTIONS = ["upcoming", "ongoing", "previous", "all"] as const;
 type Action = typeof VALID_ACTIONS[number];
 
@@ -34,57 +32,49 @@ function validateAction(action: any): Action {
 function getPromptForAction(action: Action): string {
   const today = new Date().toISOString().split('T')[0];
   
-  const basePrompt = `You are an economic calendar assistant. Your job is to provide realistic economic calendar events based on your knowledge of regularly scheduled economic releases.
+  const basePrompt = `Search the web for the REAL economic calendar for this week. Use sources like ForexFactory, Investing.com, DailyFX, or TradingEconomics to find ACTUAL scheduled economic events.
 
-Return ONLY a valid JSON array. No markdown, no code blocks, no explanations, no disclaimers.
+CRITICAL: Return ONLY real, verified economic events that are actually scheduled. Do NOT make up or hallucinate events. Every event must be a real scheduled release.
 
-Each object in the array must have:
-- id: unique string
-- title: event name (e.g. "US Non-Farm Payrolls", "ECB Interest Rate Decision")  
-- country: 3-letter currency code (USD, EUR, GBP, JPY, etc.)
+Return ONLY a valid JSON array. No markdown, no code blocks, no explanations.
+
+Each object must have exactly these fields:
+- id: unique string identifier
+- title: the exact official name of the economic release (e.g. "US Non-Farm Payrolls", "ECB Interest Rate Decision", "UK CPI y/y")
+- country: 3-letter currency code (USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD, CNY)
 - date: YYYY-MM-DD format
 - time: HH:MM format (24-hour UTC)
-- impact: "high", "medium", or "low"
-- forecast: short numeric string like "2.5%" or "250K" or null
-- previous: short numeric string like "2.3%" or "220K" or null
-- actual: short numeric string or null. MUST be null for future events after ${today}.
+- impact: "high", "medium", or "low" based on typical market impact
+- forecast: the consensus forecast value as a string (e.g. "2.5%", "250K") or null if not available
+- previous: the previous release value as a string or null
+- actual: the actual released value as a string, or null if not yet released
 
-Use your knowledge of typical economic calendar schedules. These events happen on regular schedules (monthly, quarterly, etc.). Provide realistic values based on recent economic trends.
-
-Today is ${today}. Start your response with [ and end with ].`;
+Today is ${today}. Events after today MUST have actual as null.
+Start your response with [ and end with ].`;
 
   switch (action) {
     case "upcoming":
-      return `${basePrompt}\n\nProvide 15-20 upcoming economic events for the next 7 days. All actual values must be null. Focus on major economies.`;
+      return `${basePrompt}\n\nFind 15-20 REAL upcoming economic events scheduled for the next 7 days from ${today}. Focus on high and medium impact events from major economies (US, EU, UK, Japan, Australia, Canada). All actual values must be null since these haven't happened yet.`;
     case "ongoing":
-      return `${basePrompt}\n\nProvide 5-10 economic events for today (${today}).`;
+      return `${basePrompt}\n\nFind all REAL economic events scheduled for today (${today}). Include their actual values if they have already been released today.`;
     case "previous":
-      return `${basePrompt}\n\nProvide 15-20 economic events from the past 7 days with actual values filled in.`;
+      return `${basePrompt}\n\nFind 15-20 REAL economic events that were released in the past 7 days before ${today}. Include their actual released values.`;
     case "all":
     default:
-      return `${basePrompt}\n\nProvide 25 economic events: ~10 upcoming (next 7 days, actual=null), ~5 today, ~10 past (last 7 days, with actual values). Focus on high-impact events.`;
+      return `${basePrompt}\n\nFind 25-30 REAL economic events: include events from the past 3 days (with actual values), today's events, and upcoming events for the next 5 days (actual=null). Focus on high-impact events from major economies.`;
   }
 }
 
 function parsePerplexityResponse(content: string): EconomicEvent[] {
   let cleaned = content.trim();
   
-  // Remove markdown code blocks
-  if (cleaned.startsWith("```json")) {
-    cleaned = cleaned.slice(7);
-  } else if (cleaned.startsWith("```")) {
-    cleaned = cleaned.slice(3);
-  }
-  if (cleaned.endsWith("```")) {
-    cleaned = cleaned.slice(0, -3);
-  }
+  if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
+  else if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
+  if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
   cleaned = cleaned.trim();
 
-  // Try to extract JSON array from the response if it contains extra text
   const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
-  if (arrayMatch) {
-    cleaned = arrayMatch[0];
-  }
+  if (arrayMatch) cleaned = arrayMatch[0];
 
   try {
     const parsed = JSON.parse(cleaned);
@@ -98,9 +88,7 @@ function parsePerplexityResponse(content: string): EconomicEvent[] {
     function sanitizeValue(val: any): string | undefined {
       if (val == null) return undefined;
       const s = String(val).trim();
-      if (s.length <= 20 && /^-?[\d.,]+[%KMBTkmbtp]?$/i.test(s)) {
-        return s;
-      }
+      if (s.length <= 20 && /^-?[\d.,]+[%KMBTkmbtp]?$/i.test(s)) return s;
       return undefined;
     }
     
@@ -132,7 +120,6 @@ serve(async (req) => {
   }
 
   try {
-    // Authentication required
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -157,14 +144,13 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub;
-
     const body = await req.json().catch(() => ({}));
     const action = validateAction(body?.action);
 
     console.log(`User ${userId} economic-news request: action=${action}`);
 
     if (!PERPLEXITY_API_KEY) {
-      console.error("API key configuration issue");
+      console.error("PERPLEXITY_API_KEY not configured");
       return new Response(JSON.stringify({ data: [], error: "Service temporarily unavailable" }), {
         status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -182,14 +168,17 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "sonar",
         messages: [
+          { role: "system", content: "You are an economic calendar data provider. You MUST search the web for REAL economic calendar data. Return ONLY valid JSON arrays. Never fabricate events." },
           { role: "user", content: prompt }
         ],
-        temperature: 0.1,
+        temperature: 0.0,
+        search_recency_filter: "week",
       }),
     });
 
     if (!response.ok) {
-      console.error("External API error:", response.status);
+      const errorBody = await response.text();
+      console.error("Perplexity API error:", response.status, errorBody);
       return new Response(JSON.stringify({ data: [], error: "Service temporarily unavailable" }), {
         status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -199,16 +188,16 @@ serve(async (req) => {
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content || "[]";
     
+    console.log("Raw response length:", content.length);
+    
     const data = parsePerplexityResponse(content);
-
-    console.log(`Parsed ${data.length} events`);
+    console.log(`Parsed ${data.length} events for action=${action}`);
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
     console.error("Function error:", error);
-
     return new Response(JSON.stringify({ data: [], error: "An error occurred processing your request" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
