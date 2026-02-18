@@ -128,6 +128,46 @@ const SentimentBadge = ({ sentiment }: { sentiment: 'Bullish' | 'Bearish' | 'Neu
   return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border"><Minus className="w-3 h-3" />Neutral</span>;
 };
 
+// Predict whether data will come positive or negative based on forecast vs previous
+function getPrediction(event: EconomicEvent): { label: string; probability: number; color: string; icon: 'up' | 'down' | 'neutral' } {
+  const title = event.title.toLowerCase();
+  const forecast = event.forecast ? parseFloat(String(event.forecast).replace(/[^-\d.]/g, '')) : null;
+  const previous = event.previous ? parseFloat(String(event.previous).replace(/[^-\d.]/g, '')) : null;
+
+  if (event.actual) {
+    const actual = parseFloat(String(event.actual).replace(/[^-\d.]/g, ''));
+    if (forecast !== null && !isNaN(actual) && !isNaN(forecast)) {
+      if (actual > forecast) return { label: 'Beat Forecast', probability: 100, color: 'text-bullish', icon: 'up' };
+      if (actual < forecast) return { label: 'Missed Forecast', probability: 100, color: 'text-bearish', icon: 'down' };
+      return { label: 'Met Forecast', probability: 100, color: 'text-muted-foreground', icon: 'neutral' };
+    }
+  }
+
+  if (forecast === null || previous === null || isNaN(forecast) || isNaN(previous)) {
+    return { label: 'Uncertain', probability: 50, color: 'text-muted-foreground', icon: 'neutral' };
+  }
+
+  const isInverse = title.includes('unemployment') || title.includes('jobless');
+  const diff = forecast - previous;
+  const pctChange = previous !== 0 ? Math.abs(diff / previous) * 100 : 0;
+  const isPositive = isInverse ? diff < 0 : diff > 0;
+
+  let probability: number;
+  if (Math.abs(diff) < 0.001) {
+    probability = 50;
+  } else if (pctChange > 10) {
+    probability = isPositive ? 75 : 25;
+  } else if (pctChange > 5) {
+    probability = isPositive ? 65 : 35;
+  } else {
+    probability = isPositive ? 60 : 40;
+  }
+
+  if (probability >= 60) return { label: 'Likely Positive', probability, color: 'text-bullish', icon: 'up' };
+  if (probability <= 40) return { label: 'Likely Negative', probability: 100 - probability, color: 'text-bearish', icon: 'down' };
+  return { label: 'Mixed Outlook', probability: 50, color: 'text-amber-400', icon: 'neutral' };
+}
+
 export const NewsCalendar: React.FC = () => {
   const [events, setEvents] = useState<EconomicEvent[]>(fallbackEvents);
   const [impactFilter, setImpactFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
@@ -339,6 +379,7 @@ export const NewsCalendar: React.FC = () => {
             <div className="space-y-3">
               {categoryEvents.map((event, index) => {
                 const impact = getMarketImpact(event);
+                const prediction = getPrediction(event);
                 const isExpanded = expandedEvent === event.id;
                 return (
                   <div
@@ -367,6 +408,23 @@ export const NewsCalendar: React.FC = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-6 text-sm">
+                          {/* Prediction Badge */}
+                          <div className="text-center">
+                            <p className="text-muted-foreground text-xs mb-1">Prediction</p>
+                            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              prediction.icon === 'up' ? 'bg-bullish/15 text-bullish border border-bullish/30' :
+                              prediction.icon === 'down' ? 'bg-bearish/15 text-bearish border border-bearish/30' :
+                              'bg-muted text-muted-foreground border border-border'
+                            }`}>
+                              {prediction.icon === 'up' && <TrendingUp className="w-3 h-3" />}
+                              {prediction.icon === 'down' && <TrendingDown className="w-3 h-3" />}
+                              {prediction.icon === 'neutral' && <Minus className="w-3 h-3" />}
+                              <span>{prediction.label}</span>
+                              {prediction.probability !== 50 && (
+                                <span className="opacity-70">{prediction.probability}%</span>
+                              )}
+                            </div>
+                          </div>
                           <div className="text-center">
                             <p className="text-muted-foreground text-xs mb-1">Actual</p>
                             {event.actual ? (
