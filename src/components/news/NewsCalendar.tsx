@@ -76,8 +76,8 @@ function getMarketImpact(event: EconomicEvent): MarketImpact {
   }
   if (title.includes('cpi') || title.includes('inflation') || title.includes('ppi')) {
     return {
-      positive: { gold: 'Bullish', crypto: 'Bullish', currencies: 'Neutral', detail: `Higher inflation drives demand for gold & crypto as hedges.` },
-      negative: { gold: 'Bearish', crypto: 'Bearish', currencies: 'Neutral', detail: `Lower inflation reduces hedge demand for gold & crypto.` },
+      positive: { gold: 'Bearish', crypto: 'Bearish', currencies: 'Bullish', detail: `Higher inflation → Fed hikes rates → USD bullish → gold & crypto fall.` },
+      negative: { gold: 'Bullish', crypto: 'Bullish', currencies: 'Bearish', detail: `Lower inflation → Fed cuts rates → USD bearish → gold & crypto rally.` },
     };
   }
   if (title.includes('gdp')) {
