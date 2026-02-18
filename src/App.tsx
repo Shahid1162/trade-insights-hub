@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -27,6 +27,13 @@ const SectionLoader = () => (
 
 const MainApp = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
+
+  // Listen for cross-component navigation events
+  useEffect(() => {
+    const handler = (e: CustomEvent) => setActiveSection(e.detail);
+    window.addEventListener('navigate-section', handler as EventListener);
+    return () => window.removeEventListener('navigate-section', handler as EventListener);
+  }, []);
 
   const renderSection = () => {
     switch (activeSection) {
