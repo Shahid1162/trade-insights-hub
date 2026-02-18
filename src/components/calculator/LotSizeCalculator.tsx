@@ -142,6 +142,13 @@ export const LotSizeCalculator: React.FC = () => {
               </div>
             )}
           </div>
+          {/* Selected pair badge */}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 text-sm font-medium text-primary">
+              <Target className="w-3.5 h-3.5" />
+              {pair} <span className="text-xs text-muted-foreground font-normal">— Pip: ${pipValues[pair]}</span>
+            </span>
+          </div>
           {/* Click outside to close */}
           {showDropdown && (
             <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
