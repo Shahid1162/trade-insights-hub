@@ -421,7 +421,7 @@ export const SignalGenerator: React.FC = () => {
               <p className="text-sm font-semibold text-amber-400 mb-1">⚠️ Risk Management Warning</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Always trade as per your own risk tolerance. Never risk more than you can afford to lose. 
-                If you're unsure about proper position sizing, use the <button onClick={(e) => { e.stopPropagation(); const calcNav = document.querySelector('[data-section="calculator"]') as HTMLElement; if (calcNav) calcNav.click(); }} className="text-primary underline underline-offset-2 hover:text-primary/80 font-semibold inline-flex items-center gap-1"><Calculator className="w-3 h-3" />Lot Size Calculator</button> to manage your risk properly before entering any trade.
+                If you're unsure about proper position sizing, use the <button onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('navigate-section', { detail: 'calculator' })); }} className="text-primary underline underline-offset-2 hover:text-primary/80 font-semibold inline-flex items-center gap-1"><Calculator className="w-3 h-3" />Lot Size Calculator</button> to manage your risk properly before entering any trade.
               </p>
             </div>
           </div>

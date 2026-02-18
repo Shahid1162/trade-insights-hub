@@ -159,12 +159,26 @@ Before producing your final JSON, you MUST perform each analysis step thoroughly
 
 ---
 
-## STEP 1: CHART READING (MOST IMPORTANT)
+## STEP 1: CHART READING & INSTRUMENT DETECTION (MOST IMPORTANT)
 - Read the Y-axis price scale on the RIGHT side of BOTH charts
 - Identify the current price (last candle close)
 - Identify the visible price range (highest and lowest price on chart)
-- Detect the instrument/pair from the chart title, watermark, or price format
 - Count the number of candles visible to understand the time context
+
+**INSTRUMENT DETECTION — MANDATORY:**
+You MUST detect the instrument/pair. Use ALL available clues:
+1. Check the chart TITLE BAR at the top (e.g. "EURUSD", "XAUUSD,H1", "BTCUSDT")
+2. Check for any WATERMARK or LOGO text on the chart
+3. If no text label is visible, DEDUCE from the PRICE:
+   - Price 0.5-2.0 → Forex pair (EURUSD ~1.08, GBPUSD ~1.27, AUDUSD ~0.65, USDCHF ~0.88, NZDUSD ~0.59)
+   - Price 100-160 → USDJPY (~155), EURJPY (~165), GBPJPY (~195)
+   - Price 1800-3500 → XAUUSD (Gold, currently ~3200)
+   - Price 22-35 → XAGUSD (Silver)
+   - Price 60000-120000 → BTCUSD
+   - Price 2000-5000 → ETHUSD
+   - Price 65-90 → USOIL / Crude Oil
+   - Price 14000-23000 → NIFTY50 / Bank Nifty (Indian indices)
+4. Return the STANDARD symbol format: EURUSD, XAUUSD, BTCUSD, etc. (no slashes)
 
 ## STEP 2: MARKET STRUCTURE ANALYSIS (${sanitizedTimeframe1} — Higher Timeframe)
 
@@ -311,7 +325,7 @@ The confirmationNote must be SPECIFIC, e.g.:
 - "Wait for London session open for volatility expansion"
 
 ${sanitizedAnalysisType === 'intraday' ? 
-  'INTRADAY SPECIFICS:\n- SL: 10-25 pips, TP1: 20-50 pips, TP2: 50-80 pips, TP3: 80-150 pips\n- ONLY trade during London (02:00-05:00 EST) or NY (07:00-10:00 EST) killzones\n- Look for Asian range sweep → London/NY expansion (highest probability ICT setup)\n- Identify the previous session\'s high and low as key liquidity levels\n- Power of 3: Accumulation (Asian) → Manipulation (London open sweep) → Distribution (London/NY move)' :
+  'INTRADAY SPECIFICS — TIGHT RISK MANAGEMENT:\n- The DOLLAR VALUE between Entry and SL must be MAX $10-$15 (e.g. for Gold: 10-15 points max SL)\n- The DOLLAR VALUE between Entry and TP1 must be MAX $20-$30 (e.g. for Gold: 20-30 points max TP1)\n- TP2 should be roughly 1.5x of TP1 distance, TP3 roughly 2x of TP1 distance\n- Keep entries TIGHT — use 5min/15min OBs for precise sniper entries\n- SL: 10-25 pips for forex, $10-$15 for commodities/crypto\n- TP1: 20-50 pips for forex, $20-$30 for commodities/crypto\n- TP2: 50-80 pips for forex, $30-$45 for commodities/crypto\n- TP3: 80-120 pips for forex, $45-$60 for commodities/crypto\n- ONLY trade during London (02:00-05:00 EST) or NY (07:00-10:00 EST) killzones\n- Look for Asian range sweep → London/NY expansion (highest probability ICT setup)\n- Identify the previous session\'s high and low as key liquidity levels\n- Power of 3: Accumulation (Asian) → Manipulation (London open sweep) → Distribution (London/NY move)' :
 sanitizedAnalysisType === 'swing' ? 
   'SWING SPECIFICS:\n- SL: 30-100 pips, TP1: 80-200 pips, TP2: 200-350 pips, TP3: 350-500 pips\n- Use Weekly/Daily for bias, 4H for structure, 1H for entry refinement\n- Look for weekly liquidity sweeps and daily BOS for trend confirmation\n- Institutional accumulation/distribution patterns on daily chart\n- Hold time: 2-10 days, patience is key' :
   'POSITIONAL SPECIFICS:\n- SL: 80-250 pips, TP1: 250-500 pips, TP2: 500-800 pips, TP3: 800-1500 pips\n- Monthly/Weekly structure determines macro bias\n- Daily OB and weekly FVG for entry zones\n- Look for quarterly shifts and seasonal tendencies\n- Hold time: 2-8 weeks, requires strong conviction'}
