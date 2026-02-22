@@ -122,6 +122,7 @@ serve(async (req) => {
             changePercent: parseFloat(t.priceChangePercent),
             high: parseFloat(t.highPrice),
             low: parseFloat(t.lowPrice),
+            prevClose: parseFloat(t.prevClosePrice),
             volume: parseFloat(t.volume),
           }));
         break;

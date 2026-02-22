@@ -8,6 +8,7 @@ export interface CryptoTicker {
   changePercent: number;
   high?: number;
   low?: number;
+  prevClose?: number;
   volume?: number;
 }
 
