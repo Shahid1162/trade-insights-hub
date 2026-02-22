@@ -75,11 +75,7 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick })
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-4 gap-2 pt-3 border-t border-border/40">
-        <div className="text-center">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Prev Close</p>
-          <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.prevClose ?? 0)}</p>
-        </div>
+      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border/40">
         <div className="text-center">
           <p className="text-[10px] text-bullish uppercase tracking-wide">High</p>
           <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.high ?? 0)}</p>
@@ -87,6 +83,10 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick })
         <div className="text-center">
           <p className="text-[10px] text-bearish uppercase tracking-wide">Low</p>
           <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.low ?? 0)}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Prev Close</p>
+          <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.prevClose ?? 0)}</p>
         </div>
         <div className="text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Volume</p>
