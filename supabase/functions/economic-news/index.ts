@@ -30,13 +30,14 @@ function getDateOffset(days: number): string {
 function getPrompt(action: Action): string {
   const today = getToday();
   const base = `Return a JSON array of real economic calendar events. No markdown. Start with [ end with ].
-Format: [{"id":"1","title":"event","country":"USD","date":"YYYY-MM-DD","time":"HH:MM","impact":"high","forecast":null,"previous":null,"actual":null}]
+CRITICAL: Every event MUST have "forecast" and "previous" fields with real numeric values (e.g. "3.5%", "180K", "1.2%"). Never omit them. If unknown, use reasonable estimates based on recent data.
+Format: [{"id":"1","title":"event","country":"USD","date":"YYYY-MM-DD","time":"HH:MM","impact":"high","forecast":"3.5%","previous":"3.2%","actual":null}]
 Countries: USD,EUR,GBP,JPY,AUD,CAD,CHF,NZD,CNY. Impact: high,medium,low. Today: ${today}.`;
 
   if (action === "upcoming") {
-    return `${base} List 15 upcoming high/medium impact events from ${getDateOffset(1)} to ${getDateOffset(7)}. All actual=null.`;
+    return `${base} List 15 upcoming high/medium impact events from ${getDateOffset(1)} to ${getDateOffset(7)}. All actual=null. Include forecast and previous for every event.`;
   }
-  return `${base} List 20 events: past 3 days with actual values, today, next 5 days (actual=null). High/medium impact.`;
+  return `${base} List 20 events: past 3 days with actual values, today, next 5 days (actual=null). High/medium impact. Include forecast and previous for every event.`;
 }
 
 function parsePerplexityResponse(content: string, action: Action): any[] {
