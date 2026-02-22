@@ -33,6 +33,13 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick })
       ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : v.toFixed(6);
 
+  const fmtVol = (v: number) => {
+    if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
+    if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+    if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+    return v.toFixed(0);
+  };
+
   return (
     <div
       className={`p-4 rounded-xl bg-card border border-border/50 hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 animate-fade-in ${onClick ? 'cursor-pointer' : ''}`}
@@ -68,7 +75,7 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick })
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border/40">
+      <div className="grid grid-cols-4 gap-2 pt-3 border-t border-border/40">
         <div className="text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Prev Close</p>
           <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.prevClose ?? 0)}</p>
@@ -80,6 +87,10 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick })
         <div className="text-center">
           <p className="text-[10px] text-bearish uppercase tracking-wide">Low</p>
           <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.low ?? 0)}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Volume</p>
+          <p className="text-xs font-mono font-medium mt-0.5">{fmtVol(stock.volume ?? 0)}</p>
         </div>
       </div>
     </div>
