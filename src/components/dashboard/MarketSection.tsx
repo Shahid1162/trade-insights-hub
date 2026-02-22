@@ -6,10 +6,11 @@ interface MarketSectionProps {
   title: string;
   icon: React.ReactNode;
   stocks: Stock[];
+  sparklines?: Record<string, number[]>;
   onStockClick?: (symbol: string, name: string) => void;
 }
 
-export const MarketSection: React.FC<MarketSectionProps> = ({ title, icon, stocks, onStockClick }) => {
+export const MarketSection: React.FC<MarketSectionProps> = ({ title, icon, stocks, sparklines, onStockClick }) => {
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center gap-3">
@@ -23,7 +24,8 @@ export const MarketSection: React.FC<MarketSectionProps> = ({ title, icon, stock
           <MarketCard 
             key={stock.symbol} 
             stock={stock} 
-            index={index} 
+            index={index}
+            sparklineData={sparklines?.[stock.symbol]}
             onClick={onStockClick ? () => onStockClick(stock.symbol, stock.name) : undefined}
           />
         ))}

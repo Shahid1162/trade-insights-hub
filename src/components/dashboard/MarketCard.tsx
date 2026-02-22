@@ -1,10 +1,12 @@
 import React from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { Stock } from '@/lib/types';
+import { Sparkline } from './Sparkline';
 
 interface MarketCardProps {
   stock: Stock;
   index: number;
+  sparklineData?: number[];
   onClick?: () => void;
 }
 
@@ -21,7 +23,7 @@ function getStructure(stock: Stock): { label: string; bullish: boolean } {
   return { label: bullish ? 'Bullish' : 'Bearish', bullish };
 }
 
-export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick }) => {
+export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, sparklineData, onClick }) => {
   const price = stock?.price ?? 0;
   const change = stock?.change ?? 0;
   const changePercent = stock?.changePercent ?? 0;
@@ -73,6 +75,13 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick })
           {isPositive ? '+' : ''}{changePercent.toFixed(2)}%
         </span>
       </div>
+
+      {/* Sparkline Chart */}
+      {sparklineData && sparklineData.length > 1 && (
+        <div className="mb-3 rounded-lg overflow-hidden bg-muted/30 p-1">
+          <Sparkline data={sparklineData} height={36} positive={isPositive} />
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border/40">

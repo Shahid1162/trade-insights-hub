@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Bitcoin, RefreshCw, BarChart3, Calculator, Newspaper, Zap, TrendingUp, TrendingDown, Shield } from 'lucide-react';
 import { MarketSection } from './MarketSection';
 import { Stock } from '@/lib/types';
-import { getCryptoPrices, CryptoTicker } from '@/lib/binanceApi';
+import { getCryptoPrices, getCryptoKlines, CryptoTicker } from '@/lib/binanceApi';
 
 const features = [
   {
@@ -51,9 +51,12 @@ const features = [
 
 export const Dashboard: React.FC = () => {
   const [cryptoAssets, setCryptoAssets] = useState<Stock[]>([]);
+  const [sparklines, setSparklines] = useState<Record<string, number[]>>({});
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const initialFetchDone = useRef(false);
+
+  const sparklinesFetched = useRef(false);
 
   const fetchMarketData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -75,6 +78,22 @@ export const Dashboard: React.FC = () => {
         }));
         
         setCryptoAssets(cryptoData);
+
+        // Fetch sparkline data once
+        if (!sparklinesFetched.current) {
+          sparklinesFetched.current = true;
+          const symbols = prices.map(p => p.symbol);
+          const results: Record<string, number[]> = {};
+          await Promise.all(
+            symbols.map(async (sym) => {
+              try {
+                const klines = await getCryptoKlines(sym, '1h', 24);
+                results[sym] = klines.map(k => k.close);
+              } catch { /* skip */ }
+            })
+          );
+          setSparklines(results);
+        }
       }
 
       setLastUpdated(new Date());
@@ -197,6 +216,7 @@ export const Dashboard: React.FC = () => {
             title="Cryptocurrency"
             icon={<Bitcoin className="w-5 h-5" />}
             stocks={cryptoAssets}
+            sparklines={sparklines}
           />
         </div>
       )}
