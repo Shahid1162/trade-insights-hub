@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bitcoin, RefreshCw, BarChart3, Calculator, Newspaper, Zap, TrendingUp, Shield } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Bitcoin, RefreshCw, BarChart3, Calculator, Newspaper, Zap, TrendingUp, TrendingDown, Shield } from 'lucide-react';
 import { MarketSection } from './MarketSection';
 import { Stock } from '@/lib/types';
 import { getCryptoPrices, CryptoTicker } from '@/lib/binanceApi';
@@ -151,6 +151,44 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Market Sentiment Bar */}
+      {cryptoAssets.length > 0 && (() => {
+        const bullishCount = cryptoAssets.filter(s => {
+          const prevClose = s.prevClose ?? s.price;
+          const high = s.high ?? s.price;
+          const low = s.low ?? s.price;
+          const mid = low + (high - low) / 2;
+          return s.price > prevClose && s.price > mid;
+        }).length;
+        const bearishCount = cryptoAssets.length - bullishCount;
+        const bullishPct = Math.round((bullishCount / cryptoAssets.length) * 100);
+        const bearishPct = 100 - bullishPct;
+
+        return (
+          <div className="p-4 rounded-xl bg-card/50 border border-border/50 space-y-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">Market Sentiment</h3>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded ${bullishPct >= 50 ? 'bg-bullish/15 text-bullish' : 'bg-bearish/15 text-bearish'}`}>
+                {bullishPct >= 50 ? 'Overall Bullish' : 'Overall Bearish'}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-bullish" />
+                <span className="text-sm font-medium text-bullish">{bullishCount} Bullish ({bullishPct}%)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <TrendingDown className="w-4 h-4 text-bearish" />
+                <span className="text-sm font-medium text-bearish">{bearishCount} Bearish ({bearishPct}%)</span>
+              </div>
+            </div>
+            <div className="w-full h-2 rounded-full bg-bearish/20 overflow-hidden">
+              <div className="h-full rounded-full bg-bullish transition-all duration-500" style={{ width: `${bullishPct}%` }} />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Crypto Section */}
       {cryptoAssets.length > 0 && (
