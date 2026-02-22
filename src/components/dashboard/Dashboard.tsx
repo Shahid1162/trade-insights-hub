@@ -112,7 +112,7 @@ export const Dashboard: React.FC = () => {
       initialFetchDone.current = true;
     }
     
-    const interval = setInterval(() => fetchMarketData(false), 10000);
+    const interval = setInterval(() => fetchMarketData(false), 1000);
     return () => clearInterval(interval);
   }, []);
 
