@@ -9,9 +9,8 @@ const corsHeaders = {
 const VALID_ACTIONS = ["upcoming", "all"] as const;
 type Action = (typeof VALID_ACTIONS)[number];
 
-// In-memory cache
 const cache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
 
 function validateAction(action: any): Action {
   const sanitized = String(action ?? "all").toLowerCase();
@@ -40,7 +39,7 @@ Countries: USD,EUR,GBP,JPY,AUD,CAD,CHF,NZD,CNY. Impact: high,medium,low. Today: 
   return `${base} List 20 events: past 3 days with actual values, today, next 5 days (actual=null). High/medium impact.`;
 }
 
-function parseResponse(content: string, action: Action): any[] {
+function parsePerplexityResponse(content: string, action: Action): any[] {
   let cleaned = content.trim();
   if (cleaned.startsWith("```")) cleaned = cleaned.replace(/^```\w*\n?/, "").replace(/```$/, "").trim();
   const match = cleaned.match(/\[[\s\S]*\]/);
@@ -103,11 +102,10 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = validateAction(body?.action);
-
     console.log(`User ${user.id} economic-news: action=${action}`);
 
-    // Check cache first
-    const cacheKey = `${action}-${getToday()}`;
+    const today = getToday();
+    const cacheKey = `${action}-${today}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       console.log(`Cache hit: ${cached.data.length} events`);
@@ -116,6 +114,7 @@ serve(async (req) => {
       });
     }
 
+    // Use Perplexity (fast sonar model with caching)
     const apiKey = Deno.env.get("PERPLEXITY_API_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ data: [], error: "Service unavailable" }), {
@@ -141,7 +140,7 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      console.error("API error:", response.status);
+      console.error("Perplexity error:", response.status);
       return new Response(JSON.stringify({ data: [], error: "Service unavailable" }), {
         status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -149,9 +148,8 @@ serve(async (req) => {
 
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content || "[]";
-    const data = parseResponse(content, action);
-    
-    // Cache the result
+    const data = parsePerplexityResponse(content, action);
+
     if (data.length > 0) {
       cache.set(cacheKey, { data, timestamp: Date.now() });
     }
