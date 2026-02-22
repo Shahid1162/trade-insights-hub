@@ -43,7 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeSection, onSectionChange }
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-400 flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-sm">TA5</span>
             </div>
-            <span className="text-xl font-bold gradient-text">TA5pro</span>
+            <span className="text-xl font-bold gradient-text">ta5pro</span>
           </div>
 
           {/* Desktop Navigation */}
