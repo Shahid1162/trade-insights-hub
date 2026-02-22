@@ -37,7 +37,7 @@ Countries: USD,EUR,GBP,JPY,AUD,CAD,CHF,NZD,CNY. Impact: high,medium,low. Today: 
   if (action === "upcoming") {
     return `${base} List 15 upcoming high/medium impact events from ${getDateOffset(1)} to ${getDateOffset(7)}. All actual=null. Include forecast and previous for every event.`;
   }
-  return `${base} List 20 events: past 3 days with actual values, today, next 5 days (actual=null). High/medium impact. Include forecast and previous for every event.`;
+  return `${base} List 20 events: past 3 days with actual values, today's events with actual values if already released (check if the event time has passed), next 5 days (actual=null). High/medium impact. Include forecast and previous for every event. IMPORTANT: For today's events that have already occurred, you MUST include the actual released value.`;
 }
 
 function parsePerplexityResponse(content: string, action: Action): any[] {
