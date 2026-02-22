@@ -8,11 +8,30 @@ interface MarketCardProps {
   onClick?: () => void;
 }
 
+function getStructure(stock: Stock): { label: string; bullish: boolean } {
+  const price = stock.price ?? 0;
+  const prevClose = stock.prevClose ?? price;
+  const high = stock.high ?? price;
+  const low = stock.low ?? price;
+  const range = high - low;
+  const midpoint = low + range / 2;
+  const abovePrevClose = price > prevClose;
+  const aboveMidpoint = price > midpoint;
+  const bullish = abovePrevClose && aboveMidpoint;
+  return { label: bullish ? 'Bullish' : 'Bearish', bullish };
+}
+
 export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick }) => {
   const price = stock?.price ?? 0;
   const change = stock?.change ?? 0;
   const changePercent = stock?.changePercent ?? 0;
   const isPositive = change >= 0;
+  const structure = getStructure(stock);
+
+  const fmt = (v: number) =>
+    v >= 1
+      ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : v.toFixed(6);
 
   return (
     <div
@@ -20,25 +39,47 @@ export const MarketCard: React.FC<MarketCardProps> = ({ stock, index, onClick })
       style={{ animationDelay: `${index * 50}ms` }}
       onClick={onClick}
     >
+      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="font-semibold text-foreground">{stock?.symbol ?? 'N/A'}</h3>
           <p className="text-xs text-muted-foreground truncate max-w-[120px]">{stock?.name ?? 'Unknown'}</p>
         </div>
-        <div className={`p-2 rounded-lg ${isPositive ? 'bg-bullish/10' : 'bg-bearish/10'}`}>
-          {isPositive ? (
-            <TrendingUp className="w-4 h-4 text-bullish" />
-          ) : (
-            <TrendingDown className="w-4 h-4 text-bearish" />
-          )}
+        <div className="flex flex-col items-end gap-1">
+          <div className={`p-1.5 rounded-lg ${isPositive ? 'bg-bullish/10' : 'bg-bearish/10'}`}>
+            {isPositive ? (
+              <TrendingUp className="w-4 h-4 text-bullish" />
+            ) : (
+              <TrendingDown className="w-4 h-4 text-bearish" />
+            )}
+          </div>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${structure.bullish ? 'bg-bullish/15 text-bullish' : 'bg-bearish/15 text-bearish'}`}>
+            {structure.label}
+          </span>
         </div>
       </div>
-      <div className="flex items-end justify-between">
-        <span className="text-xl font-mono font-bold">
-          ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+      {/* Price & Change */}
+      <div className="flex items-end justify-between mb-3">
+        <span className="text-xl font-mono font-bold">${fmt(price)}</span>
+        <span className={`text-sm font-medium ${isPositive ? 'text-bullish' : 'text-bearish'}`}>
+          {isPositive ? '+' : ''}{changePercent.toFixed(2)}%
         </span>
-        <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-bullish' : 'text-bearish'}`}>
-          <span>{isPositive ? '+' : ''}{changePercent.toFixed(2)}%</span>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border/40">
+        <div className="text-center">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Prev Close</p>
+          <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.prevClose ?? 0)}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] text-bullish uppercase tracking-wide">High</p>
+          <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.high ?? 0)}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] text-bearish uppercase tracking-wide">Low</p>
+          <p className="text-xs font-mono font-medium mt-0.5">${fmt(stock.low ?? 0)}</p>
         </div>
       </div>
     </div>

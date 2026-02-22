@@ -67,6 +67,10 @@ export const Dashboard: React.FC = () => {
           price: p.price,
           change: p.change,
           changePercent: p.changePercent,
+          high: p.high,
+          low: p.low,
+          prevClose: p.prevClose,
+          volume: p.volume,
           market: 'crypto' as const,
         }));
         

@@ -10,6 +10,10 @@ export interface Stock {
   price: number;
   change: number;
   changePercent: number;
+  high?: number;
+  low?: number;
+  prevClose?: number;
+  volume?: number;
   market: 'indian' | 'us' | 'crypto';
 }
 
