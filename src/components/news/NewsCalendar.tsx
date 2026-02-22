@@ -30,7 +30,7 @@ const impactColors = {
   low: 'bg-muted text-muted-foreground border-border',
 };
 
-type EventCategory = 'all' | 'upcoming';
+type EventCategory = 'all' | 'upcoming' | 'previous';
 
 const timezones = [
   { value: 'Asia/Kolkata', label: 'India (IST)', offset: '+5:30' },
@@ -183,6 +183,13 @@ export const NewsCalendar: React.FC = () => {
   const filteredEvents = events.filter((event) => {
     const matchesImpact = impactFilter === 'all' || event.impact === impactFilter;
     const matchesDate = !selectedDate || event.date === format(selectedDate, 'yyyy-MM-dd');
+    
+    // For "previous" category, show today's events that have actual data + past events
+    if (categoryFilter === 'previous') {
+      const isPastOrActual = event.date < today || (event.date === today && event.actual);
+      return matchesImpact && matchesDate && isPastOrActual;
+    }
+    
     return matchesImpact && matchesDate;
   });
 
@@ -192,6 +199,13 @@ export const NewsCalendar: React.FC = () => {
     const bIsToday = b.date === today;
     const aIsFuture = a.date > today;
     const bIsFuture = b.date > today;
+
+    if (categoryFilter === 'previous') {
+      // For previous: today's released events first, then most recent past
+      if (aIsToday && !bIsToday) return -1;
+      if (!aIsToday && bIsToday) return 1;
+      return b.date.localeCompare(a.date) || b.time.localeCompare(a.time);
+    }
 
     if (aIsToday && !bIsToday) return -1;
     if (!aIsToday && bIsToday) return 1;
@@ -232,8 +246,10 @@ export const NewsCalendar: React.FC = () => {
   const fetchEconomicNews = async (category: EventCategory = 'all') => {
     setLoading(true);
     try {
+      // "previous" uses the "all" action since it needs past + today data
+      const apiAction = category === 'previous' ? 'all' : category;
       const { data, error } = await supabase.functions.invoke('economic-news', {
-        body: { action: category },
+        body: { action: apiAction },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -332,7 +348,7 @@ export const NewsCalendar: React.FC = () => {
       <div className="flex flex-wrap items-center gap-4 animate-fade-in">
         <span className="text-sm text-muted-foreground">Category:</span>
         <div className="flex gap-2">
-          {(['all', 'upcoming'] as EventCategory[]).map((category) => (
+          {(['all', 'previous', 'upcoming'] as EventCategory[]).map((category) => (
             <Button key={category} variant={categoryFilter === category ? 'gradient' : 'outline'} size="sm" onClick={() => setCategoryFilter(category)}>
               {category.charAt(0).toUpperCase() + category.slice(1)}
             </Button>
